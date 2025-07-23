@@ -43,8 +43,8 @@ Have a look at the [AsTeRICS Foundation homepage](https://www.asterics-foundatio
 * [The AsTeRICS framework](https://github.com/asterics/AsTeRICS) - provides high flexibility for building Assistive Technology solutions. 
 
 # Links and Credits
-Most of this work has been accomplished at the UAS Technikum Wien in course of the R&D-projects *ToRaDes* (MA23 project 18-04), *WBT* (MA23 project 26-02) and Indiko (MA23 project 38-09), which have been supported by the [City of Vienna](https://www.wien.gv.at/kontakte/ma23/index.html),
-see: [ToRaDes Project Information](https://embsys.technikum-wien.at/projects/torades/index.php), [Webpage WBT project](https://wbt.wien), [Webpage InDiKo project](https://www.technikum-wien.at/en/research-projects/indiko/).
+Most of this work has been accomplished at the UAS Technikum Wien in course of the R&D-projects [ToRaDes](https://embsys.technikum-wien.at/projects/torades/index.php) (MA23 project 18-04),
+[WBT](https://wbt.wien) (MA23 project 26-02) and [InDiKo](https://www.technikum-wien.at/en/research-projects/indiko/) (MA23 project 38-09), which have been supported by the [City of Vienna](https://www.wien.gv.at/kontakte/ma23/index.html).
 
 # Support us
 Please support the development of Open Source Assistive Technology projects by donating to the AsTeRICS Foundation:
