@@ -1,6 +1,6 @@
 # Welcome to FabiWare
 FabiWare is the official firmware for different alternative computer input devices including [FABI](https://github.com/asterics/FABI), 
-[FlipMouse}(https://github.com/asterics/FLipMouse) and [FlipPad](https://github.com/asterics/FLipPad). 
+[FlipMouse](https://github.com/asterics/FLipMouse) and [FlipPad](https://github.com/asterics/FLipPad). 
 (The FabiWare firmware is compatible with these devices since HW-version 3, using the Raspberry Pi Pico familiy of microcontrollers. 
 Prior HW versions use a different firmware which is still available in the respective repositories.)
 
@@ -9,7 +9,7 @@ Devices running FabiWare can be configured using a [Web-based configuration edit
 settings and changing them "on-the-fly". Find more information how to configure the individual button functions and system options in the user manuals for the FABI/FlipMouse devices:
 
 * [FlipMouse user manual](https://github.com/asterics/FLipMouse/tree/master/Documentation/UserManual)
-* [FABI user manual]((https://github.com/asterics/FABI/tree/master/Documentation/UserManual)
+* [FABI user manual](https://github.com/asterics/FABI/tree/master/Documentation/UserManual)
 
 (TBD: update manuals for new FabiWare functions)
 
@@ -29,19 +29,18 @@ Many thanks to the people behind the following projects:
 
 * the [RP Pico core](https://github.com/earlephilhower/arduino-pico) by Earle Philhower
 * the [RP Pico PlatformIO support](https://github.com/maxgerhardt/platform-raspberrypi) by Max Gerhardt
-* the [Adafruit Neopixel](https://github.com/adafruit/Adafruit_NeoPixel)and [Adafruit BusIO](https://github.com/adafruit/Adafruit_BusIO) libraries
+* the [Adafruit Neopixel](https://github.com/adafruit/Adafruit_NeoPixel) and [Adafruit BusIO](https://github.com/adafruit/Adafruit_BusIO) libraries
 * the [SSD1306 Ascii](https://github.com/greiman/SSD1306Ascii) library by Bill Greiman
 * our own libraries/library adatations: [LoadCellSensor](https://github.com/ChrisVeigl/LoadcellSensor) and [NAU7802-DualChannel](https://github.com/benjaminaigner/NAU7802-DualChannel)
 
 ## Example setups and applications
 Have a look at the [AsTeRICS Foundation homepage](https://www.asterics-foundation.org) for applications and our other Open Source projects:
 
-* FABI: [The Flexible Assistive Button Interface](https://github.com/asterics/FABI): an open source switch interface for USB HID and Bluetooth.
-* FLipMouse: [The FLipMouse controller](https://github.com/asterics/FLipMouse): an open source alternative input device for controlling computers and mobile devices with minimal muscle movement.
-* FLipPad: [The FLipPad controller](https://github.com/asterics/FLipMouse): a flexible touchpad for controlling computers and mobile devices with minimal muscle movement.
-* AsTeRICS Grid: [Asterics Grid AAC Web-App](https://grid.asterics.eu): an open source, cross plattform communicator / talker for Augmented and Alternative Communication (AAC).
-* AsTeRICS Framework: [AsTeRICS framework homepage](http://www.asterics.eu), [AsTeRICS framework GitHub](https://github.com/asterics/AsTeRICS): The AsTeRICS framework provides a high flexibility for building assistive solutions. 
-
+* [FABI - the Flexible Assistive Button Interface](https://github.com/asterics/FABI) - an open source switch interface for USB HID and Bluetooth.
+* [The FLipMouse controller](https://github.com/asterics/FLipMouse) - an open source alternative input device for controlling computers and mobile devices with minimal muscle movement.
+* [The FLipPad controller](https://github.com/asterics/FLipMouse) - a flexible touchpad for controlling computers and mobile devices with minimal muscle movement.
+* [Asterics Grid Open Source AAC](https://grid.asterics.eu) - an open source, cross plattform communicator / talker for Augmented and Alternative Communication (AAC).
+* [The AsTeRICS framework](https://github.com/asterics/AsTeRICS) - provides high flexibility for building Assistive Technology solutions. 
 
 # Links and Credits
 Most of this work has been accomplished at the UAS Technikum Wien in course of the R&D-projects *ToRaDes* (MA23 project 18-04), *WBT* (MA23 project 26-02) and Indiko (MA23 project 38-09), which have been supported by the [City of Vienna](https://www.wien.gv.at/kontakte/ma23/index.html),
