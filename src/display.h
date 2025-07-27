@@ -1,15 +1,19 @@
 /*
-     FabiWare - AsTeRICS Foundation
-     For more info please visit: https://www.asterics-foundation.org
+    FabiWare - AsTeRICS Foundation
+    For more info please visit: https://www.asterics-foundation.org
 
-     Module: display.h - implementation of the Oled display functions 
+    Module: display.h - implementation of the Oled display functions 
 
-     Note: Oled display connects to I2C-1 (Wire) for FlipMouse
-     The utilized library is https://github.com/greiman/SSD1306Ascii
+    Note: Oled display connects to I2C-1 (Wire) for FlipMouse
+    The utilized library is https://github.com/greiman/SSD1306Ascii
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; See the GNU General Public License:
-   http://www.gnu.org/licenses/gpl-3.0.en.html
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; See the GNU General Public License:
+    http://www.gnu.org/licenses/gpl-3.0.en.html
 
 */
 

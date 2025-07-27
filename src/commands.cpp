@@ -1,21 +1,21 @@
 /*
-     FLipWare - AsTeRICS Foundation
-     For more info please visit: https://www.asterics-foundation.org
+  FabiWare - AsTeRICS Foundation
+  For more info please visit: https://www.asterics-foundation.org
 
-     Module: commands.cpp - implementation of the AT-commands
-     For a description of the supported commands see: commands.h
+  Module: commands.cpp - implementation of the AT-commands
+  For a description of the supported commands see: commands.h
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation.
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; See the GNU General Public License:
-   http://www.gnu.org/licenses/gpl-3.0.en.html
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; See the GNU General Public License:
+  http://www.gnu.org/licenses/gpl-3.0.en.html
 
 */
 
-#include "FlipWare.h"
+#include "FabiWare.h"
 #include "eeprom.h"
 #include "display.h"
 #include "infrared.h"

@@ -1,56 +1,56 @@
 
 /*
-     FabiWare - AsTeRICS Foundation
-     For more info please visit: https://www.asterics-foundation.org
+  FabiWare - AsTeRICS Foundation
+  For more info please visit: https://www.asterics-foundation.org
 
-     Module: main.cpp  (main module with setup and loop functions for both cores)
+  Module: main.cpp  (main module with setup and loop functions for both cores)
 
-        This is the universal firmware for FABI, FlipMouse and FlipPad devices (HW version 3 or higher).
-        see https://github.com/asterics/FABI, https://github.com/asterics/FlipMouse, https://github.com/asterics/FlipPad
+    This is the universal firmware for FABI, FlipMouse and FlipPad devices (HW version 3 or higher).
+    see https://github.com/asterics/FABI, https://github.com/asterics/FlipMouse, https://github.com/asterics/FlipPad
 
-        It supports HID device emulation via USB and/or Bluetooth via connected sensors and/or serial AT-commands
-        For a description of the supported commands see: commands.h
-        Pin assignments can be found in gpio.h
+    It supports HID device emulation via USB and/or Bluetooth via connected sensors and/or serial AT-commands
+    For a description of the supported commands see: commands.h
+    Pin assignments can be found in gpio.h
 
-        HW-requirements:
-          Supported Microcontroller platforms:
-            Raspberry Pi Pico W or Pico 2 W (for FABI or FlipPad)
-            Arduino Nano 2040 Connect (for FlipMouse) 
-          Optional sensors and peripherals:
-            I2C pressure sensor board (MPRLS or DPS310) or analog pressure sensor (e.g. MPX7007)
-            I2C force sensor board (NAU7802-based) or analog 2d force sonsor (e.g. joystick module)
-            up to 5 external switches connected to GPIO pins
-            Neopixel LED
-            1 TSOP 38kHz IR-receiver
-            1 high current IR-LED, driven with a MOSFET
-            SSD1306 display
-            Piezo Buzzer and/or Analog Audio amplifier (FABI only) for acoustic feedback
+    HW-requirements:
+      Supported Microcontroller platforms:
+        Raspberry Pi Pico W or Pico 2 W (for FABI or FlipPad)
+        Arduino Nano 2040 Connect (for FlipMouse) 
+      Optional sensors and peripherals:
+        I2C pressure sensor board (MPRLS or DPS310) or analog pressure sensor (e.g. MPX7007)
+        I2C force sensor board (NAU7802-based) or analog 2d force sonsor (e.g. joystick module)
+        up to 5 external switches connected to GPIO pins
+        Neopixel LED
+        1 TSOP 38kHz IR-receiver
+        1 high current IR-LED, driven with a MOSFET
+        SSD1306 display
+        Piezo Buzzer and/or Analog Audio amplifier (FABI only) for acoustic feedback
 
-        SW-requirements (as defined in platformio.ini):
-          For building the SW, VSCode + PlatformIO is recommended, using the platform fork by Maximilian Gerhardt,
-          see: https://arduino-pico.readthedocs.io/en/latest/platformio.html 
-          Arduino-pico core by Earle Philhower, version: 4.5.0
-          Settings for RP Pico Core: File System Size: 1MB, Bluetooth Stack enabled
-          Adafruit BusIO library, version: 1.14.1
-          Adafruit Neopixel library, version: 1.11.0
-          SSD1306Ascii library by Bill Greiman, version: 1.3.5
-          LoadcellSensor library by Chris Veigl: https://github.com/ChrisVeigl/LoadcellSensor
-          NAU7802 library by Adafruit, adapted for 2 channels by Benjamin Aigner: https://github.com/benjaminaigner/NAU7802-DualChannel
+    SW-requirements (as defined in platformio.ini):
+      For building the SW, VSCode + PlatformIO is recommended, using the platform fork by Maximilian Gerhardt,
+      see: https://arduino-pico.readthedocs.io/en/latest/platformio.html 
+      Arduino-pico core by Earle Philhower, version: 4.5.0
+      Settings for RP Pico Core: File System Size: 1MB, Bluetooth Stack enabled
+      Adafruit BusIO library, version: 1.14.1
+      Adafruit Neopixel library, version: 1.11.0
+      SSD1306Ascii library by Bill Greiman, version: 1.3.5
+      LoadcellSensor library by Chris Veigl: https://github.com/ChrisVeigl/LoadcellSensor
+      NAU7802 library by Adafruit, adapted for 2 channels by Benjamin Aigner: https://github.com/benjaminaigner/NAU7802-DualChannel
 
-        Note that for the FlipMouse (using the Arduino Nano2040 Connect), our custom Bluetooth firwmare is used for the onboard ESP32 and the board must be prepared as described here:
-          https://github.com/asterics/FLipMouse/tree/master/Documentation/Fabrication/rp2040_preparation 
+    Note that for the FlipMouse (using the Arduino Nano2040 Connect), our custom Bluetooth firwmare is used for the onboard ESP32 and the board must be prepared as described here:
+      https://github.com/asterics/FLipMouse/tree/master/Documentation/Fabrication/rp2040_preparation 
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation.
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation.
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; See the GNU General Public License:
-   http://www.gnu.org/licenses/gpl-3.0.en.html
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; See the GNU General Public License:
+  http://www.gnu.org/licenses/gpl-3.0.en.html
 
 */
 
-#include "FlipWare.h"
+#include "FabiWare.h"
 #include "gpio.h"      
 #include "sensors.h"      
 #include "infrared.h"      
@@ -72,7 +72,7 @@ char moduleName[]=MODULE_NAME;   //   device name for ID string & BT-pairing
 /**
    default values for empty configuration slot 
 */
-const struct SlotSettings defaultSlotSettings = {      // default slotSettings values, for type definition see Flipware.h
+const struct SlotSettings defaultSlotSettings = {      // default slotSettings values, for type definition see FabiWare.h
   "default",                        // initial slot name
   0,                                // initial keystringbuffer length
   1,                                // stickMode: Mouse cursor movement active

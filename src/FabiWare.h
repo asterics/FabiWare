@@ -1,26 +1,26 @@
-
 /*
-     FabiWare - AsTeRICS Foundation
-     For more info please visit: https://www.asterics-foundation.org
 
-     Module: FlipWare.h  - main header file
+  FabiWare - AsTeRICS Foundation
+  For more info please visit: https://www.asterics-foundation.org
 
-   This firmware allows control of HID functions via sensor input and/or AT-commands
-   Since V3.7 the FABI and FLipMouse devices are supported by this unified firmware.
-   For a list of supported AT commands, see commands.h / commands.cpp
+  Module: FabiWare.h  - main header file
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation.
+  This firmware allows control of HID functions via sensor input and/or AT-commands
+  Since V3.7 the FABI and FLipMouse devices are supported by this unified firmware.
+  For a list of supported AT commands, see commands.h / commands.cpp
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; See the GNU General Public License:
-   http://www.gnu.org/licenses/gpl-3.0.en.html
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; See the GNU General Public License:
+  http://www.gnu.org/licenses/gpl-3.0.en.html
 
 */
 
-#ifndef _FLIPWARE_H_
-#define _FLIPWARE_H_
+#ifndef _FabiWare_H_
+#define _FabiWare_H_
 
 // Important: update the version string with every important firmware change!
 #define VERSION_STRING "v3.7"

@@ -1,8 +1,12 @@
 /*
-     FabiWare - AsTeRICS Foundation
-     For more info please visit: https://www.asterics-foundation.org
+   FabiWare - AsTeRICS Foundation
+   For more info please visit: https://www.asterics-foundation.org
 
-     Module: sensors.cpp - functions to read pressure & force sensors
+   Module: sensors.cpp - functions to read pressure & force sensors
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; See the GNU General Public License:
@@ -13,7 +17,7 @@
 #ifndef _SENSORS_H_
 #define _SENSORS_H_
 
-#include "FlipWare.h"        // we need the SensorData and SlotSettings structure definitions
+#include "FabiWare.h"        // we need the SensorData and SlotSettings structure definitions
 #include "Wire.h"            // MPRLS pressure sensor and NAU7802 sensor use I2C
 #include <hardware/adc.h>    // for directly reading the internal ADC
 #include <LoadcellSensor.h>  // for signal conditioning

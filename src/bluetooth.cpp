@@ -1,9 +1,10 @@
 /*
-  FLipWare - AsTeRICS Foundation
-  Copyright (c) Benjamin Aigner
+  FabiWare - AsTeRICS Foundation
   For more info please visit: https://www.asterics-foundation.org
 
   Module: bluetooth.cpp - using external Bluetooth addon for mouse/keyboard control
+  Copyright (c) Benjamin Aigner
+  For a description of the supported commands see: commands.h
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -12,6 +13,7 @@
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; See the GNU General Public License:
   http://www.gnu.org/licenses/gpl-3.0.en.html
+  
 */
 
 #include "bluetooth.h"

@@ -1,18 +1,22 @@
 /*
-     FabiWare - AsTeRICS Foundation
-     For more info please visit: https://www.asterics-foundation.org
+  FabiWare - AsTeRICS Foundation
+  For more info please visit: https://www.asterics-foundation.org
 
-    Module: lpwFuncs.cpp - C module for battery and power management functions
+  Module: lpwFuncs.cpp - C module for battery and power management functions
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; See the GNU General Public License:
-   http://www.gnu.org/licenses/gpl-3.0.en.html
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; See the GNU General Public License:
+  http://www.gnu.org/licenses/gpl-3.0.en.html
 
 */
 
 #ifdef RP2350   // low power support only available for RP2350
 
-#include "FlipWare.h"
+#include "FabiWare.h"
 #include "gpio.h"
 #include "display.h"
 #include "pico/cyw43_arch.h"

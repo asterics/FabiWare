@@ -1,14 +1,18 @@
-/*print
-     FabiWare - AsTeRICS Foundation
-     For more info please visit: https://www.asterics-foundation.org
+/*
+  FabiWare - AsTeRICS Foundation
+  For more info please visit: https://www.asterics-foundation.org
 
-     Module: tone.cpp - functions for tone feedback (using a piezo buzzer) and audio transfer + playback
-     Audio playback is using wav files, PWM and analog audio amp
-     (currently only 22KHz mono 16 bit wav files are supported. TBD: mp3 support?)
+  Module: tone.cpp - functions for tone feedback (using a piezo buzzer) and audio transfer + playback
+  Audio playback is using wav files, PWM and analog audio amp
+  (currently only 22KHz mono 16 bit wav files are supported. TBD: mp3 support?)
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; See the GNU General Public License:
-   http://www.gnu.org/licenses/gpl-3.0.en.html
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; See the GNU General Public License:
+  http://www.gnu.org/licenses/gpl-3.0.en.html
 
 */
 

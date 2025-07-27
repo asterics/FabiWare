@@ -7,17 +7,18 @@
 	This program is free software; you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation.
-
-	This program is distributed in the hope that it will be useful,
+   
+   This program is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; See the GNU General Public License:
 	http://www.gnu.org/licenses/gpl-3.0.en.html
+   
 */
 
 
 #ifndef _HID_HAL_H_
 #define _HID_HAL_H_
 
-#include "FlipWare.h"
+#include "FabiWare.h"
 
 #define DRAG_RECORDING_IDLE 0
 #define DRAG_RECORDING_ACTIVE 1

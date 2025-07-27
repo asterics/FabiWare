@@ -1,18 +1,23 @@
 /*
-     FabiWare - AsTeRICS Foundation
-     For more info please visit: https://www.asterics-foundation.org
 
-     Module: display.cpp - implementation of the Oled display functions 
-     The utilized library is https://github.com/greiman/SSD1306Ascii
+  FabiWare - AsTeRICS Foundation
+  For more info please visit: https://www.asterics-foundation.org
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; See the GNU General Public License:
-   http://www.gnu.org/licenses/gpl-3.0.en.html
+  Module: display.cpp - implementation of the Oled display functions 
+  The utilized library is https://github.com/greiman/SSD1306Ascii
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; See the GNU General Public License:
+  http://www.gnu.org/licenses/gpl-3.0.en.html
 
 */
 
 #include <Arduino.h>
-#include "FlipWare.h"
+#include "FabiWare.h"
 #include "gpio.h"
 #include "SSD1306Ascii.h"
 #include "SSD1306AsciiWire.h"

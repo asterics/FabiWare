@@ -1,8 +1,12 @@
 /*
-     FabiWare - AsTeRICS Foundation
-     For more info please visit: https://www.asterics-foundation.org
+   FabiWare - AsTeRICS Foundation
+   For more info please visit: https://www.asterics-foundation.org
 
-     Module: tone.h - functions for tone/audio feedback 
+   Module: tone.h - functions for tone/audio feedback 
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; See the GNU General Public License:
@@ -13,7 +17,7 @@
 #ifndef _TONE_H_
 #define _TONE_H_
 
-#include "FlipWare.h"
+#include "FabiWare.h"
 #include "gpio.h"
 
 #define SOUND_FOLDER "/sounds/"

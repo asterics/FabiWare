@@ -1,9 +1,8 @@
 /*
-     FabiWare - AsTeRICS Foundation
-     For more info please visit: https://www.asterics-foundation.org
+   FabiWare - AsTeRICS Foundation
+   For more info please visit: https://www.asterics-foundation.org
 
-     Module: modes.h - implementation of stick operation and special modes, header file
-
+   Module: modes.h - implementation of stick operation and special modes, header file
 
    For a list of supported AT commands, see commands.h / commands.cpp
 

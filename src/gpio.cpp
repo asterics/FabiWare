@@ -1,17 +1,21 @@
 /*
-     FLipWare - AsTeRICS Foundation
-     For more info please visit: https://www.asterics-foundation.org
+  FabiWare - AsTeRICS Foundation
+  For more info please visit: https://www.asterics-foundation.org
 
-     Module: gpio.cpp - functions for leds and buttons
+  Module: gpio.cpp - functions for leds and buttons
 
-   This program is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; See the GNU General Public License:
-   http://www.gnu.org/licenses/gpl-3.0.en.html
+	This program is free software; you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation.
+   
+  This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; See the GNU General Public License:
+	http://www.gnu.org/licenses/gpl-3.0.en.html
 
 */
 
 #include "gpio.h"
-#include "FlipWare.h"
+#include "FabiWare.h"
 #include <Adafruit_NeoPixel.h>
 
 int8_t  input_map[NUMBER_OF_PHYSICAL_BUTTONS] = PHYSICAL_BUTTON_MAP ;

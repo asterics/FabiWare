@@ -11,6 +11,7 @@
 	This program is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; See the GNU General Public License:
 	http://www.gnu.org/licenses/gpl-3.0.en.html
+  
 */
 
 #include "hid_hal.h"

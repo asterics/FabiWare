@@ -1,8 +1,8 @@
 /*
-     FabiWare - AsTeRICS Foundation
-     For more info please visit: https://www.asterics-foundation.org
+   FabiWare - AsTeRICS Foundation
+   For more info please visit: https://www.asterics-foundation.org
 
-     Module: parser.h - implementation of the parser for serial commands and parameters
+   Module: parser.h - implementation of the parser for serial commands and parameters
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; See the GNU General Public License:

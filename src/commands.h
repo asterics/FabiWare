@@ -1,8 +1,8 @@
 /*
-     FLipWare - AsTeRICS Foundation
-     For more info please visit: https://www.asterics-foundation.org
+      FabiWare - AsTeRICS Foundation
+      For more info please visit: https://www.asterics-foundation.org
 
-     Module: commands.h - implementation of the AT-commands, header file
+      Module: commands.h - implementation of the AT-commands, header file
 
 
    Supported AT-commands:
