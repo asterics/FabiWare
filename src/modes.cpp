@@ -23,10 +23,6 @@
    static variables for mode handling
  * */
 uint8_t strongSipPuffState = STRONG_MODE_IDLE;
-uint8_t mouseMoveCount = 0;
-unsigned long currentTime;
-unsigned long previousTime = 0;
-
 
 /**
    forward declarations of module-internal functions
@@ -342,13 +338,34 @@ int scaleJoystickAxis (float val) {
 */
 void handleMovement() 
 {
-  //static int upState=0,downState=0,leftState=0,rightState=0;
-  
-  if ((sensorData.autoMoveX != 0) || (sensorData.autoMoveY != 0)) // handle movement induced by button actions
-  {
-    if (mouseMoveCount++ % 4 == 0)
-      mouseMove(sensorData.autoMoveX, sensorData.autoMoveY);
-  }
+  NB_DELAY_START(mouseAxis, MOUSE_MINIMUM_SEND_INTERVAL)
+    int moveX=0, moveY=0;
+    
+    // handle accelerated mouse cursor movement induced by button actions
+    if (sensorData.autoMoveX == 0) {
+      sensorData.autoMoveXTimestamp = 0;
+    } else {
+      if (sensorData.autoMoveXTimestamp == 0) 
+        sensorData.autoMoveXTimestamp = millis();
+      else {
+        float f= (float)(millis() - sensorData.autoMoveXTimestamp) / (float)MOUSE_AUTOMOVE_ACCELERATION_TIME;
+        if (f > 1.0f) f = 1.0f;
+        moveX=sensorData.autoMoveX * f;
+      }
+    }
+    if (sensorData.autoMoveY == 0) {
+      sensorData.autoMoveYTimestamp = 0;
+    } else {
+      if (sensorData.autoMoveYTimestamp == 0) 
+        sensorData.autoMoveYTimestamp = millis();
+      else {
+        float f= (float)(millis() - sensorData.autoMoveYTimestamp) / (float)MOUSE_AUTOMOVE_ACCELERATION_TIME;
+        if (f > 1.0f) f = 1.0f;
+        moveY=sensorData.autoMoveY * f;
+      }
+    }
+    if ((moveX != 0) || (moveY != 0))  mouseMove(moveX, moveY);  // perform mouse movement
+  NB_DELAY_END
 
   if (globalSettings.thresholdAutoDwell && sensorData.mouseMoveTimestamp) {
     if (millis() - sensorData.mouseMoveTimestamp >= globalSettings.thresholdAutoDwell) {

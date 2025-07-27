@@ -103,6 +103,7 @@ struct SensorData sensorData {
   .deadZone=0, .force=0, .forceRaw=0, .angle=0,
   .dir=0,
   .autoMoveX=0, .autoMoveY=0,
+  .autoMoveXTimestamp=0, .autoMoveYTimestamp=0,
   .mouseMoveTimestamp=0,
   .clickReleaseTimestamp=0,
   .xLocalMax=0, .yLocalMax=0,

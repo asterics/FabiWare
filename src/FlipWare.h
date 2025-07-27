@@ -4,9 +4,9 @@
      For more info please visit: https://www.asterics-foundation.org
 
      Module: FlipWare.h  - main header file
-     V3.1: FABI V3 and FLipMouse V3 code fusion
 
-   This firmware allows control of HID functions via FABI module and/or AT-commands
+   This firmware allows control of HID functions via sensor input and/or AT-commands
+   Since V3.7 the FABI and FLipMouse devices are supported by this unified firmware.
    For a list of supported AT commands, see commands.h / commands.cpp
 
    This program is free software; you can redistribute it and/or modify
@@ -82,16 +82,13 @@
 /**
    global constant definitions
 */
-#ifdef FLIPMOUSE
-  #define UPDATE_INTERVAL     8    // update interval for performing HID actions (in milliseconds)
-#else
-  #define UPDATE_INTERVAL     5    // update interval for performing HID actions (in milliseconds)
-#endif
-
+#define UPDATE_INTERVAL     5    // update interval for performing HID actions (in milliseconds)
 #define DEFAULT_CLICK_TIME  8    // time for mouse click (loop iterations from press to release)
 #define CALIBRATION_PERIOD  1000  // approx. 1000ms calibration time
 #define BATTERY_UPDATE_INTERVAL  500  // update interval for battery management functions (in milliseconds)
-#define GAMEPAD_MINIMUM_SEND_INTERVAL 15 // minimum time between two gamepad axis updates (in milliseconds)
+#define GAMEPAD_MINIMUM_SEND_INTERVAL 15 // minimum time between gamepad axis updates (in milliseconds)
+#define MOUSE_MINIMUM_SEND_INTERVAL   20 // minimum time between mouse axis updates (in milliseconds)
+#define MOUSE_AUTOMOVE_ACCELERATION_TIME 1000 // timespan for accelerating auto mouse x/y movement (in milliseconds)
 
 // RAM buffers and memory constraints
 #define WORKINGMEM_SIZE         300    // reserved RAM for working memory (command parser, IR-rec/play)
@@ -175,6 +172,7 @@ struct SensorData {
   float deadZone, force, forceRaw, angle;
   uint8_t dir;
   int8_t autoMoveX,autoMoveY;
+  uint32_t autoMoveXTimestamp, autoMoveYTimestamp;
   uint32_t mouseMoveTimestamp;
   uint32_t clickReleaseTimestamp;
   int xLocalMax, yLocalMax;  
