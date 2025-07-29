@@ -236,6 +236,7 @@ void inactivityHandler() {
   initDormant();
   dormantUntilInterrupt(input_map, NUMBER_OF_PHYSICAL_BUTTONS); // enter sleepMode, use input_map pins to wakeup!
   //  <--   now sleeping!  
+  // deinitDormant(); <- todo (soft startup)
   cyw43_arch_init();
   goingDormant = false;
   watchdog_reboot(0, 0, 10);  // cause a watchdog reset to wake everything up!
@@ -272,6 +273,8 @@ void initDormant() {
 
   cyw43_arch_deinit();
 
+  // clearLeds(); <- todo in gpio.{c/h}
+
   displayMessage((char*) "ByeBye");
   pauseDisplayUpdates(1);
   delay(2000);
@@ -287,6 +290,11 @@ void initDormant() {
   disablePeripherals(); delay(50);
   Serial.end(); delay(500);
 }
+
+// void deinitDormant() {
+//   cyw43_arch_init();
+//   goingDormant = false;
+// } <- todo (implement soft startup)
 
 /**
  * @name savePeripherals
