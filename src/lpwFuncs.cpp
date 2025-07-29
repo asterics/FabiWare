@@ -20,6 +20,8 @@
 #include "gpio.h"
 #include "display.h"
 #include "pico/cyw43_arch.h"
+#include "hardware/pwm.h"
+#include "tone.h"
 
 extern "C" {
   #include "../lib/power/sleep.h"
@@ -232,37 +234,12 @@ void dormantUntilInterrupt(int interruptPin) {
  * @brief Handles inactivity by transitioning the system to dormant mode.
  */
 void inactivityHandler() {
-  inactivityTime=0;
-  deinitBattery();
-  #ifndef FLIPMOUSE
-    MouseBLE.end();     // turn off Bluetooth
-  #endif
-  #ifdef DEBUG_BATTERY_MANAGEMENT
-    Serial.println("goodbye, going to sleep!");
-  #endif 
-  Serial.flush();
-  Serial.end();
-  displayMessage((char*)"ByeBye");
-  delay(2000);   // time for the user to read the message
-  disable3V3();  // shut down peripherals
-  digitalWrite(LED_BUILTIN,LOW);  // make sure the internal LED is off
-
-  dormantUntilInterrupt(input_map[0]); // enter sleepMode, use Button1 to wakeup!
+  initDormant();
+  dormantUntilInterrupt(input_map, NUMBER_OF_PHYSICAL_BUTTONS); // enter sleepMode, use input_map pins to wakeup!
   //  <--   now sleeping!  
-  
+  cyw43_arch_init();
   watchdog_reboot(0, 0, 10);  // cause a watchdog reset to wake everything up!
-  while (1) { continue; }     
-
-  /*
-    // Note: this soft startup did not work ... TBD!
-    Serial.begin(115200);
-    delay(3000);  // allow some time for serial interface to come up
-    enable3V3();
-    initBattery();
-    displayReinit();
-    initButtons();
-    initDebouncers();
-  */
+  while (1) { continue; }
 }
 
 /**
@@ -273,6 +250,42 @@ void userActivity() { // Call of this function can be found in line 181, buttons
   inactivityTime=0;   // reset the inactivity counter!
 }
 
+void initDormant() {
+  delay(2000);
+
+  #ifdef AUDIO_SIGNAL_PIN
+    pwm_set_enabled(pwm_gpio_to_slice_num(AUDIO_SIGNAL_PIN), false);
+  #endif
+  #ifdef TONE_PIN
+    pwm_set_enabled(pwm_gpio_to_slice_num(TONE_PIN), false);
+  #endif
+  alarm_pool_destroy(app_alarm_pool);
+  #ifdef IR_LED_PIN
+    stop_IR_command();
+  #endif
+
+  MouseBLE.end(); delay(500); KeyboardBLE.end(); delay(500);
+  #ifdef FABIJOYSTICK_ENABLED
+    JoystickBLE.end();
+  #endif
+
+  cyw43_arch_deinit();
+
+  displayMessage((char*) "ByeBye");
+  pauseDisplayUpdates(1);
+  delay(2000);
+  displayClear();
+
+  if (Wire.available()) {
+    Wire.flush(); delay(10); Wire.endTransmission(); delay(10); Wire.end(); delay(100); 
+  }
+  if (Wire1.available()) {
+    Wire1.flush(); delay(10); Wire1.endTransmission(); delay(10); Wire1.end(); delay(100);
+  }
+
+  disablePeripherals(); delay(50);
+  Serial.end(); delay(500);
+}
 
 /**
  * @name savePeripherals
