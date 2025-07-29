@@ -311,10 +311,10 @@ void savePeripherals() {
 void disablePeripherals() {
   for (uint pin = 0; pin < 29; pin++) {
     if (pin == 23 || pin == 24 || pin == 25) continue; // skip specific pins
-    if (pinBackup[pin].func == GPIO_FUNC_SIO) {
-      gpio_disable_pulls(pin);
-      gpio_deinit(pin);
-    }
+    digitalWrite(pin, LOW);
+    pinMode(pin, INPUT);
+    digitalWrite(pin, LOW);
+    delay(5);
   }
 }
 
