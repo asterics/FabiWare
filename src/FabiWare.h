@@ -186,6 +186,7 @@ struct SensorData {
 */
 
 extern alarm_pool_t *app_alarm_pool;
+extern bool goingDormant;         // dormant flag to signal the device is going to sleep (stop all execution)
 extern char moduleName[];
 extern uint8_t actSlot;
 extern uint8_t addonUpgrade;

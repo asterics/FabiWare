@@ -237,6 +237,7 @@ void inactivityHandler() {
   dormantUntilInterrupt(input_map, NUMBER_OF_PHYSICAL_BUTTONS); // enter sleepMode, use input_map pins to wakeup!
   //  <--   now sleeping!  
   cyw43_arch_init();
+  goingDormant = false;
   watchdog_reboot(0, 0, 10);  // cause a watchdog reset to wake everything up!
   while (1) { continue; }
 }
@@ -250,6 +251,7 @@ void userActivity() { // Call of this function can be found in line 181, buttons
 }
 
 void initDormant() {
+  goingDormant = true;
   delay(2000);
 
   #ifdef AUDIO_SIGNAL_PIN
