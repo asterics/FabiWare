@@ -20,6 +20,8 @@
 #include "gpio.h"
 #include "display.h"
 #include "pico/cyw43_arch.h"
+#include "hardware/pwm.h"
+#include "tone.h"
 
 extern "C" {
   #include "../lib/power/sleep.h"
@@ -219,10 +221,9 @@ void enableBattMeasure() {
  * @brief Puts the device into dormant mode until a specified GPIO interrupt wakes it up.
  * @param interruptPin GPIO pin to monitor for the interrupt.
  */
-void dormantUntilInterrupt(int interruptPin) {
-  delay(1); // small delay to ensure system stability, might be redundant
+void dormantUntilInterrupt(int8_t *wake_interrupt_gpios, int8_t amt_gpios) {
   sleep_run_from_lposc(); // use low-power oscillator for minimal power consumption
-  sleep_goto_dormant_until_edge_high(interruptPin); // wait for rising edge interrupt
+  sleep_goto_dormant_until_edge_high(wake_interrupt_gpios, amt_gpios); // wait for rising edge interrupt
   sleep_power_up(); // restore sys clocks after waking up (using rosc -> jump starts processor)
   delay(400); // allow some time for system to stabilize after restoring sys clocks
 }
@@ -232,37 +233,14 @@ void dormantUntilInterrupt(int interruptPin) {
  * @brief Handles inactivity by transitioning the system to dormant mode.
  */
 void inactivityHandler() {
-  inactivityTime=0;
-  deinitBattery();
-  #ifndef FLIPMOUSE
-    MouseBLE.end();     // turn off Bluetooth
-  #endif
-  #ifdef DEBUG_BATTERY_MANAGEMENT
-    Serial.println("goodbye, going to sleep!");
-  #endif 
-  Serial.flush();
-  Serial.end();
-  displayMessage((char*)"ByeBye");
-  delay(2000);   // time for the user to read the message
-  disable3V3();  // shut down peripherals
-  digitalWrite(LED_BUILTIN,LOW);  // make sure the internal LED is off
-
-  dormantUntilInterrupt(input_map[0]); // enter sleepMode, use Button1 to wakeup!
+  initDormant();
+  dormantUntilInterrupt(input_map, NUMBER_OF_PHYSICAL_BUTTONS); // enter sleepMode, use input_map pins to wakeup!
   //  <--   now sleeping!  
-  
+  // deinitDormant(); <- todo (soft startup)
+  cyw43_arch_init();
+  goingDormant = false;
   watchdog_reboot(0, 0, 10);  // cause a watchdog reset to wake everything up!
-  while (1) { continue; }     
-
-  /*
-    // Note: this soft startup did not work ... TBD!
-    Serial.begin(115200);
-    delay(3000);  // allow some time for serial interface to come up
-    enable3V3();
-    initBattery();
-    displayReinit();
-    initButtons();
-    initDebouncers();
-  */
+  while (1) { continue; }
 }
 
 /**
@@ -273,6 +251,50 @@ void userActivity() { // Call of this function can be found in line 181, buttons
   inactivityTime=0;   // reset the inactivity counter!
 }
 
+void initDormant() {
+  goingDormant = true;
+  delay(2000);
+
+  #ifdef AUDIO_SIGNAL_PIN
+    pwm_set_enabled(pwm_gpio_to_slice_num(AUDIO_SIGNAL_PIN), false);
+  #endif
+  #ifdef TONE_PIN
+    pwm_set_enabled(pwm_gpio_to_slice_num(TONE_PIN), false);
+  #endif
+  alarm_pool_destroy(app_alarm_pool);
+  #ifdef IR_LED_PIN
+    stop_IR_command();
+  #endif
+
+  MouseBLE.end(); delay(500); KeyboardBLE.end(); delay(500);
+  #ifdef FABIJOYSTICK_ENABLED
+    JoystickBLE.end();
+  #endif
+
+  cyw43_arch_deinit();
+
+  // clearLeds(); <- todo in gpio.{c/h}
+
+  displayMessage((char*) "ByeBye");
+  pauseDisplayUpdates(1);
+  delay(2000);
+  displayClear();
+
+  if (Wire.available()) {
+    Wire.flush(); delay(10); Wire.endTransmission(); delay(10); Wire.end(); delay(100); 
+  }
+  if (Wire1.available()) {
+    Wire1.flush(); delay(10); Wire1.endTransmission(); delay(10); Wire1.end(); delay(100);
+  }
+
+  disablePeripherals(); delay(50);
+  Serial.end(); delay(500);
+}
+
+// void deinitDormant() {
+//   cyw43_arch_init();
+//   goingDormant = false;
+// } <- todo (implement soft startup)
 
 /**
  * @name savePeripherals
@@ -298,10 +320,10 @@ void savePeripherals() {
 void disablePeripherals() {
   for (uint pin = 0; pin < 29; pin++) {
     if (pin == 23 || pin == 24 || pin == 25) continue; // skip specific pins
-    if (pinBackup[pin].func == GPIO_FUNC_SIO) {
-      gpio_disable_pulls(pin);
-      gpio_deinit(pin);
-    }
+    digitalWrite(pin, LOW);
+    pinMode(pin, INPUT);
+    digitalWrite(pin, LOW);
+    delay(5);
   }
 }
 
@@ -349,95 +371,5 @@ void loadPeripherals() {
     }
   }
 }
-
-// #define DORMANT_SOURCE_LPOSC 1
-// void goSleep(uint gpio_pin, bool edge, bool high){
-//   uint src_hz = 32 * KHZ;
-//   uint clk_ref_src = CLOCKS_CLK_REF_CTRL_SRC_VALUE_LPOSC_CLKSRC;
-//   clock_configure(clk_ref, clk_ref_src, 0, src_hz, src_hz);
-//   clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLK_REF, 0, src_hz, src_hz);
-//   clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS, src_hz, src_hz);
-
-//   clock_stop(clk_adc);
-//   clock_stop(clk_usb);
-//   clock_stop(clk_hstx);
-//   pll_deinit(pll_sys);
-//   pll_deinit(pll_usb);
-
-//   // // Assuming both xosc and rosc are running at the moment
-//   //   if (dormant_source == DORMANT_SOURCE_XOSC) {
-//   //       // Can disable rosc
-//   //       rosc_disable();
-//   //   } else {
-//   //       // Can disable xosc
-//   //       xosc_disable();
-//   //   }
-
-//   // the lines up above assume RP2040 that has no LPOSC so it always disables xosc when
-//   // there's a will to use LPOSC as dormant source:
-//   xosc_disable();
-
-//   bool low = !high;
-//   bool level = !edge;
-
-//   uint32_t event = 0
-
-//   if (level && low) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_LEVEL_LOW_BITS;
-//   if (level && high) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_LEVEL_HIGH_BITS;
-//   if (edge && high) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_EDGE_HIGH_BITS;
-//   if (edge && low) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_EDGE_LOW_BITS;
-
-//   gpio_init(gpio_pin);
-//   gpio_set_input_enabled(gpio_pin, true);
-//   gpio_set_input_hysteresis_enabled(gpio_pin, true);
-//   gpio_set_dormant_irq_enabled(gpio_pin, event, true);
-
-//   // here belongs going dormant()
-
-//   /** @note when using crystal oscillator as dormant source */
-//   // xosc_dormant();
-
-//   /** @note when using ring oscillator as dormant source */
-//   // hw_clear_bits(&rosc_hw->status, ROSC_STATUS_BADWRITE_BITS);
-
-//   // if !(rosc_hw->status & ROSC_STATUS_BADWRITE_BITS){
-//   //   rosc_hw->dormant = ROSC_DORMANT_VALUE_DORMANT;
-
-//   //   if !(rosc_hw->status & ROSC_STATUS_BADWRITE_BITS){
-//   //     // all good.
-//   //   } else {
-//   //     // something went wrong.
-//   //   }
-//   //   // wait for ring oscillator to become stable once woken up
-//   //   while(!(rosc_hw->status & ROSC_STATUS_STABLE_BITS));
-//   // } else {
-//   //   // something went wrong.
-//   // }
-
-//   // EXECUTION WILL STOP HERE.
-
-//   gpio_acknowledge_irq(gpio_pin, event);
-//   gpio_set_input_enabled(gpio_pin, false);
-
-  
-//   // To be called after waking up from sleep/dormant mode to restore system clocks properly
-//   // if !(rosc_hw->status & ROSC_STATUS_BADWRITE_BITS){
-//   //   rosc_hw->ctrl = ROSC_CTRL_ENABLE_BITS;
-
-//   //   if !(rosc_hw->status & ROSC_STATUS_BADWRITE_BITS){
-//   //     // all good.
-//   //   } else {
-//   //     // something went wrong.
-//   //   }
-//   //   // wait for ring oscillator to become stable once woken up
-//   //   while(!(rosc_hw->status & ROSC_STATUS_STABLE_BITS));
-//   // } else {
-//   //   // something went wrong.
-//   // }
-//   clocks_init();
-
-//   delay(1000);
-// }
-
 
 #endif

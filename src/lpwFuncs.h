@@ -81,6 +81,8 @@ void disableBattMeasure();            // disables battery voltage measurement ci
 void inactivityHandler();                     // prepares sleep mode
 void dormantUntilInterrupt(int interruptPin); // puts the device into dormant mode
 void userActivity();                          // handles user interaction: resets inactivity counter
+void initDormant();
+// void deinitDormant(); <- todo
 
 /**
  * @name Utility Functions

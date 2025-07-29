@@ -114,6 +114,7 @@ struct SensorData sensorData {
 struct SlotSettings slotSettings;             // contains all slot settings
 uint8_t workingmem[WORKINGMEM_SIZE];          // working memory (command parser, IR-rec/play)
 uint8_t actSlot = 0;                          // number of current slot
+bool goingDormant = false;                    // dormant flag
 
 /*
   Handling I2C devices for check if something changed (will reset device, e.g. if external sensors are connected)
@@ -383,7 +384,7 @@ void testI2Cdevices(TwoWire *interface, uint8_t *device_list) {
   //reset device list
   memset(device_list,0,8);
 
-  while(supported_devices[devicenr] != 0x00) { //test until address is 0x00
+  while(supported_devices[devicenr] != 0x00 && !goingDormant) { //test until address is 0x00
     interface->beginTransmission(supported_devices[devicenr]);
     uint8_t result = interface->endTransmission();
     //if found: add to array of active devices

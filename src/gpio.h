@@ -102,4 +102,6 @@ void updateLeds();
 */
 void setLeds(uint8_t leds);
 
+// void clearLeds(); <- todo
+
 #endif
