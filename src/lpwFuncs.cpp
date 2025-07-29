@@ -221,10 +221,9 @@ void enableBattMeasure() {
  * @brief Puts the device into dormant mode until a specified GPIO interrupt wakes it up.
  * @param interruptPin GPIO pin to monitor for the interrupt.
  */
-void dormantUntilInterrupt(int interruptPin) {
-  delay(1); // small delay to ensure system stability, might be redundant
+void dormantUntilInterrupt(int8_t *wake_interrupt_gpios, int8_t amt_gpios) {
   sleep_run_from_lposc(); // use low-power oscillator for minimal power consumption
-  sleep_goto_dormant_until_edge_high(interruptPin); // wait for rising edge interrupt
+  sleep_goto_dormant_until_edge_high(wake_interrupt_gpios, amt_gpios); // wait for rising edge interrupt
   sleep_power_up(); // restore sys clocks after waking up (using rosc -> jump starts processor)
   delay(400); // allow some time for system to stabilize after restoring sys clocks
 }
