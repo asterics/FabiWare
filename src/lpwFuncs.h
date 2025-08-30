@@ -40,8 +40,8 @@ struct PinConfig
  * @name Time Definitions
  * @brief Constants for inactivity time configurations.
  */
-#define inactivityTimeMinutes 1
-#define inactivityTimeSeconds 0
+#define inactivityTimeMinutes 0
+#define inactivityTimeSeconds 10
 
 #define BATTERY_AVERAGING     4    // number of battery measurements to be averaged  (averaging period see BATTERY_UPDATE_INTERVAL, e.g. every 500ms)
 
@@ -79,7 +79,7 @@ void disableBattMeasure();            // disables battery voltage measurement ci
  * @name Inactivity Management Functions
  */
 void inactivityHandler();                     // prepares sleep mode
-void dormantUntilInterrupt(int interruptPin); // puts the device into dormant mode
+void dormantUntilInterrupt(int8_t *wake_interrupt_gpios, int8_t amt_gpios); // puts the device into dormant mode
 void userActivity();                          // handles user interaction: resets inactivity counter
 
 /**

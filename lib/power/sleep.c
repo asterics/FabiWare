@@ -257,12 +257,12 @@ void sleep_goto_dormant_until(struct timespec *ts, aon_timer_alarm_handler_t cal
     _go_dormant();
 }
 
-void sleep_goto_dormant_until_pin(uint gpio_pin, bool edge, bool high) {
+void sleep_goto_dormant_until_pin(int8_t *gpios, int8_t amt_gpios, bool edge, bool high) {
     bool low = !high;
     bool level = !edge;
 
     // Configure the appropriate IRQ at IO bank 0
-    assert(gpio_pin < NUM_BANK0_GPIOS);
+    assert(gpios[0] < NUM_BANK0_GPIOS);
 
     uint32_t event = 0;
 
@@ -271,19 +271,24 @@ void sleep_goto_dormant_until_pin(uint gpio_pin, bool edge, bool high) {
     if (edge && high) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_EDGE_HIGH_BITS;
     if (edge && low) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_EDGE_LOW_BITS;
 
-    gpio_init(gpio_pin);
-    gpio_set_input_enabled(gpio_pin, true);
-    // gpio_pull_down(gpio_pin);
-    gpio_set_input_hysteresis_enabled(gpio_pin, true);
-    gpio_set_dormant_irq_enabled(gpio_pin, event, true);
+    for (uint8_t i = 0; i < amt_gpios; i++) {
+        gpio_init(gpios[i]);
+        gpio_set_input_enabled(gpios[i], true);
+        gpio_pull_up(gpios[i]);
+        gpio_set_input_hysteresis_enabled(gpios[i], true);
+        gpio_set_dormant_irq_enabled(gpios[i], event, true);
+    }
 
     _go_dormant();
     // Execution stops here until woken up
 
     // Clear the irq so we can go back to dormant mode again if we want
-    gpio_acknowledge_irq(gpio_pin, event);
-    gpio_set_input_enabled(gpio_pin, false);
+    for (int i = 0; i < amt_gpios; i++){
+        gpio_acknowledge_irq(gpios[i], event);
+        gpio_set_input_enabled(gpios[i], false);
+    }
 }
+
 
 // To be called after waking up from sleep/dormant mode to restore system clocks properly
 void sleep_power_up(void)

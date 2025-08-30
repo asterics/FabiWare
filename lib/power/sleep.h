@@ -98,7 +98,7 @@ void sleep_goto_dormant_until(struct timespec *ts, aon_timer_alarm_handler_t cal
  * \param high true for active high, false for active low
  */
 
-void sleep_goto_dormant_until_pin(uint gpio_pin, bool edge, bool high);
+void sleep_goto_dormant_until_pin(int8_t *gpios, int8_t amt_gpios, bool edge, bool high);
 
 /*! \brief Send system to sleep until a leading high edge is detected on GPIO
  *  \ingroup hardware_sleep
@@ -107,8 +107,8 @@ void sleep_goto_dormant_until_pin(uint gpio_pin, bool edge, bool high);
  *
  * \param gpio_pin The pin to provide the wake up
  */
-static inline void sleep_goto_dormant_until_edge_high(uint gpio_pin) {
-    sleep_goto_dormant_until_pin(gpio_pin, true, true);
+static inline void sleep_goto_dormant_until_edge_high(int8_t *gpios, int8_t amt_gpios) {
+    sleep_goto_dormant_until_pin(gpios, amt_gpios, true, true);
 }
 
 /*! \brief Send system to sleep until a high level is detected on GPIO
@@ -118,8 +118,8 @@ static inline void sleep_goto_dormant_until_edge_high(uint gpio_pin) {
  *
  * \param gpio_pin The pin to provide the wake up
  */
-static inline void sleep_goto_dormant_until_level_high(uint gpio_pin) {
-    sleep_goto_dormant_until_pin(gpio_pin, false, true);
+static inline void sleep_goto_dormant_until_level_high(int8_t *gpios, int8_t amt_gpios) {
+    sleep_goto_dormant_until_pin(gpios, amt_gpios, false, true);
 }
 
 /*! \brief Reconfigure clocks to wake up properly from sleep/dormant mode
