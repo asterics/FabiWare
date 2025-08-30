@@ -390,6 +390,9 @@ void makeTone(uint8_t kind, uint8_t slotNumber)
     case TONE_BT_PAIRING:
       pwmTone(TONE_PIN, 230, 4000);
       break;
+    case TONE_WAKEUP:
+      pwmTone(TONE_PIN, 440, 200); delay(200);
+      break;
   }
 }
 

@@ -173,8 +173,9 @@ void setup() {
   initStorage();   // initialize storage if necessary
   initAudio();
 
-  // read first configuration slot from storage if possible!
-  readFromEEPROMSlotNumber(0, false); 
+  // read last configuration slot from storage if possible, else try to loat first slot
+  if (!loadLastActiveSlotNumber())
+    readFromEEPROMSlotNumber(0, false);
 
   #ifndef FLIPMOUSE
     MouseBLE.begin(moduleName);

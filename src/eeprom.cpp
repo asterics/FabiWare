@@ -215,6 +215,56 @@ uint8_t readFromEEPROMSlotNumber(uint8_t nr, bool playTone)
 }
 
 
+uint8_t loadLastActiveSlotNumber();
+uint8_t saveLastActiveSlotNumber();
+
+/**
+   Save last active slot from EEPROM
+   returns 1 is successful, 0 otherwise
+*/
+uint8_t saveLastActiveSlotNumber()
+{
+  /** open & write this slot **/
+  char path[32];
+  sprintf(path,"/lastslot");
+  File f = LittleFS.open(path,"w");
+  if(!f) return 0;
+
+  // write current active slot number
+  f.print(actSlot);
+  f.close();
+  return (1);
+} 
+
+
+/**
+   Loads last active slot from EEPROM
+   returns 1 if successful, 0 otherwise
+ * */
+uint8_t loadLastActiveSlotNumber()
+{
+  /** open & read this slot **/
+  char path[32];
+  sprintf(path,"/lastslot");
+  if(!LittleFS.exists(path))
+  {
+    return 0;
+  }
+  
+  File f = LittleFS.open(path,"r");
+  if(!f) return 0;
+  // load name & store to slotSettings
+  String numStr = f.readStringUntil('\n');
+  numStr.trim();
+  readFromEEPROMSlotNumber(numStr.toInt(),true);
+  f.close();
+
+  return (1);
+}
+
+
+
+
 void loadATCommands(File &f)
 {
   // read line by line & feed into parser

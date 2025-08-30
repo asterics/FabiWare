@@ -172,6 +172,19 @@ uint8_t saveToEEPROM(char const * slotname);
  * */
 void saveToEEPROMSlotNumber(int8_t nr, char const * slotname);
 
+/**
+   Save last active slot from EEPROM
+   returns 1 is successful, 0 otherwise
+ * */
+uint8_t loadLastActiveSlotNumber();
+
+
+/**
+   Loads last active slot from EEPROM
+   returns 1 if successful, 0 otherwise
+ * */
+uint8_t saveLastActiveSlotNumber();
+
 
 /**
    load all AT commands from a file
