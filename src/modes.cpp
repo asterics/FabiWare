@@ -382,6 +382,12 @@ void handleMovement()
     sensorData.clickReleaseTimestamp = 0;
   }
 
+  #ifdef RP2350
+    if (sensorData.x || sensorData.y) {   // if there is any movement
+      userActivity(); // keep system from going into dormant mode (see lpwFuncs.h)
+    }
+  #endif
+
   switch (slotSettings.stickMode) {  
 
     case STICKMODE_MOUSE:   // handle mouse stick mode
