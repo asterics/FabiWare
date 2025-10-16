@@ -236,22 +236,30 @@ void inactivityHandler() {
   inactivityTime=0;
   saveLastActiveSlotNumber(); 
   deinitBattery();
+  digitalWrite(LED_BUILTIN,LOW);  // make sure the internal LED is off 
+  // Note: do not use the LED after cyw43_arch_deinit() - this would bring up the cyw43-chip again !!
+
   #ifndef FLIPMOUSE
     MouseBLE.end();     // turn off Bluetooth
+    KeyboardBLE.end();  // turn off Bluetooth
+    // JoystickBLE.end();  // turn off Bluetooth
+    cyw43_arch_deinit();
   #endif
   #ifdef DEBUG_BATTERY_MANAGEMENT
     Serial.println("goodbye, going to sleep!");
   #endif 
   Serial.flush();
   Serial.end();
+  Wire.end();
+  Wire1.end();
   displayMessage((char*)"ByeBye");
   delay(2000);   // time for the user to read the message
   disable3V3();  // shut down peripherals
-  digitalWrite(LED_BUILTIN,LOW);  // make sure the internal LED is off
 
   dormantUntilInterrupt(input_map, NUMBER_OF_PHYSICAL_BUTTONS); // enter sleepMode, use input_map pins to wakeup!
   //  <--   now sleeping!  
-  makeTone(TONE_WAKEUP,0);  // play startup melody
+
+  makeTone(TONE_WAKEUP,0);    // play startup tone
   watchdog_reboot(0, 0, 10);  // cause a watchdog reset to wake everything up!
   while (1) { continue; }     
 
@@ -276,10 +284,11 @@ void userActivity() { // Call of this function can be found in line 181, buttons
 }
 
 
-/**
- * @name savePeripherals
- * @brief Saves the current GPIO configuration for all pins.
- */
+/*
+
+// Utility Functions
+// These functions might become useful to squeeze out some more uA for low-power operation ....
+
 void savePeripherals() {
   for (uint pin = 0; pin < 29; pin++) {
     if (pin == 23 || pin == 24 || pin == 25) continue; // skip specific pins
@@ -293,10 +302,6 @@ void savePeripherals() {
   Serial.println("Saved SIO pin configs.");
 }
 
-/**
- * @name disablePeripherals
- * @brief Disables all GPIO peripherals by deinitializing the pins.
- */
 void disablePeripherals() {
   for (uint pin = 0; pin < 29; pin++) {
     if (pin == 23 || pin == 24 || pin == 25) continue; // skip specific pins
@@ -307,10 +312,6 @@ void disablePeripherals() {
   }
 }
 
-/**
- * @name printPeripherals
- * @brief Prints the current GPIO configuration to the Serial monitor.
- */
 void printPeripherals() {
   for (int pin = 0; pin < 29; pin++) {
     if (pin == 23 || pin == 24 || pin == 25) continue;
@@ -335,10 +336,6 @@ void printPeripherals() {
   }
 }
 
-/**
- * @name loadPeripherals
- * @brief Restores the saved GPIO configuration for all pins.
- */
 void loadPeripherals() {
   for (uint pin = 0; pin < 29; pin++) {
     if (pin == 23 || pin == 24 || pin == 25) continue;
@@ -352,94 +349,94 @@ void loadPeripherals() {
   }
 }
 
-// #define DORMANT_SOURCE_LPOSC 1
-// void goSleep(uint gpio_pin, bool edge, bool high){
-//   uint src_hz = 32 * KHZ;
-//   uint clk_ref_src = CLOCKS_CLK_REF_CTRL_SRC_VALUE_LPOSC_CLKSRC;
-//   clock_configure(clk_ref, clk_ref_src, 0, src_hz, src_hz);
-//   clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLK_REF, 0, src_hz, src_hz);
-//   clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS, src_hz, src_hz);
+#define DORMANT_SOURCE_LPOSC 1
+void goSleep(uint gpio_pin, bool edge, bool high){
+  uint src_hz = 32 * KHZ;
+  uint clk_ref_src = CLOCKS_CLK_REF_CTRL_SRC_VALUE_LPOSC_CLKSRC;
+  clock_configure(clk_ref, clk_ref_src, 0, src_hz, src_hz);
+  clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLK_REF, 0, src_hz, src_hz);
+  clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS, src_hz, src_hz);
 
-//   clock_stop(clk_adc);
-//   clock_stop(clk_usb);
-//   clock_stop(clk_hstx);
-//   pll_deinit(pll_sys);
-//   pll_deinit(pll_usb);
+  clock_stop(clk_adc);
+  clock_stop(clk_usb);
+  clock_stop(clk_hstx);
+  pll_deinit(pll_sys);
+  pll_deinit(pll_usb);
 
-//   // // Assuming both xosc and rosc are running at the moment
-//   //   if (dormant_source == DORMANT_SOURCE_XOSC) {
-//   //       // Can disable rosc
-//   //       rosc_disable();
-//   //   } else {
-//   //       // Can disable xosc
-//   //       xosc_disable();
-//   //   }
+  // // Assuming both xosc and rosc are running at the moment
+  //   if (dormant_source == DORMANT_SOURCE_XOSC) {
+  //       // Can disable rosc
+  //       rosc_disable();
+  //   } else {
+  //       // Can disable xosc
+  //       xosc_disable();
+  //   }
 
-//   // the lines up above assume RP2040 that has no LPOSC so it always disables xosc when
-//   // there's a will to use LPOSC as dormant source:
-//   xosc_disable();
+  // the lines up above assume RP2040 that has no LPOSC so it always disables xosc when
+  // there's a will to use LPOSC as dormant source:
+  xosc_disable();
 
-//   bool low = !high;
-//   bool level = !edge;
+  bool low = !high;
+  bool level = !edge;
 
-//   uint32_t event = 0
+  uint32_t event = 0
 
-//   if (level && low) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_LEVEL_LOW_BITS;
-//   if (level && high) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_LEVEL_HIGH_BITS;
-//   if (edge && high) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_EDGE_HIGH_BITS;
-//   if (edge && low) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_EDGE_LOW_BITS;
+  if (level && low) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_LEVEL_LOW_BITS;
+  if (level && high) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_LEVEL_HIGH_BITS;
+  if (edge && high) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_EDGE_HIGH_BITS;
+  if (edge && low) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_EDGE_LOW_BITS;
 
-//   gpio_init(gpio_pin);
-//   gpio_set_input_enabled(gpio_pin, true);
-//   gpio_set_input_hysteresis_enabled(gpio_pin, true);
-//   gpio_set_dormant_irq_enabled(gpio_pin, event, true);
+  gpio_init(gpio_pin);
+  gpio_set_input_enabled(gpio_pin, true);
+  gpio_set_input_hysteresis_enabled(gpio_pin, true);
+  gpio_set_dormant_irq_enabled(gpio_pin, event, true);
 
-//   // here belongs going dormant()
+  // here belongs going dormant()
 
-//   /** @note when using crystal oscillator as dormant source */
-//   // xosc_dormant();
+  // @note when using crystal oscillator as dormant source
+  // xosc_dormant();
 
-//   /** @note when using ring oscillator as dormant source */
-//   // hw_clear_bits(&rosc_hw->status, ROSC_STATUS_BADWRITE_BITS);
+  // @note when using ring oscillator as dormant source
+  // hw_clear_bits(&rosc_hw->status, ROSC_STATUS_BADWRITE_BITS);
 
-//   // if !(rosc_hw->status & ROSC_STATUS_BADWRITE_BITS){
-//   //   rosc_hw->dormant = ROSC_DORMANT_VALUE_DORMANT;
+  // if !(rosc_hw->status & ROSC_STATUS_BADWRITE_BITS){
+  //   rosc_hw->dormant = ROSC_DORMANT_VALUE_DORMANT;
 
-//   //   if !(rosc_hw->status & ROSC_STATUS_BADWRITE_BITS){
-//   //     // all good.
-//   //   } else {
-//   //     // something went wrong.
-//   //   }
-//   //   // wait for ring oscillator to become stable once woken up
-//   //   while(!(rosc_hw->status & ROSC_STATUS_STABLE_BITS));
-//   // } else {
-//   //   // something went wrong.
-//   // }
+  //   if !(rosc_hw->status & ROSC_STATUS_BADWRITE_BITS){
+  //     // all good.
+  //   } else {
+  //     // something went wrong.
+  //   }
+  //   // wait for ring oscillator to become stable once woken up
+  //   while(!(rosc_hw->status & ROSC_STATUS_STABLE_BITS));
+  // } else {
+  //   // something went wrong.
+  // }
 
-//   // EXECUTION WILL STOP HERE.
+  // EXECUTION WILL STOP HERE.
 
-//   gpio_acknowledge_irq(gpio_pin, event);
-//   gpio_set_input_enabled(gpio_pin, false);
+  gpio_acknowledge_irq(gpio_pin, event);
+  gpio_set_input_enabled(gpio_pin, false);
 
   
-//   // To be called after waking up from sleep/dormant mode to restore system clocks properly
-//   // if !(rosc_hw->status & ROSC_STATUS_BADWRITE_BITS){
-//   //   rosc_hw->ctrl = ROSC_CTRL_ENABLE_BITS;
+  // To be called after waking up from sleep/dormant mode to restore system clocks properly
+  // if !(rosc_hw->status & ROSC_STATUS_BADWRITE_BITS){
+  //   rosc_hw->ctrl = ROSC_CTRL_ENABLE_BITS;
 
-//   //   if !(rosc_hw->status & ROSC_STATUS_BADWRITE_BITS){
-//   //     // all good.
-//   //   } else {
-//   //     // something went wrong.
-//   //   }
-//   //   // wait for ring oscillator to become stable once woken up
-//   //   while(!(rosc_hw->status & ROSC_STATUS_STABLE_BITS));
-//   // } else {
-//   //   // something went wrong.
-//   // }
-//   clocks_init();
+  //   if !(rosc_hw->status & ROSC_STATUS_BADWRITE_BITS){
+  //     // all good.
+  //   } else {
+  //     // something went wrong.
+  //   }
+  //   // wait for ring oscillator to become stable once woken up
+  //   while(!(rosc_hw->status & ROSC_STATUS_STABLE_BITS));
+  // } else {
+  //   // something went wrong.
+  // }
+  clocks_init();
 
-//   delay(1000);
-// }
-
+  delay(1000);
+}
+*/
 
 #endif
