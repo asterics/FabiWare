@@ -40,8 +40,8 @@ struct PinConfig
  * @name Time Definitions
  * @brief Constants for inactivity time configurations.
  */
-#define inactivityTimeMinutes 0
-#define inactivityTimeSeconds 10
+#define inactivityTimeMinutes 3
+#define inactivityTimeSeconds 0
 
 #define BATTERY_AVERAGING     4    // number of battery measurements to be averaged  (averaging period see BATTERY_UPDATE_INTERVAL, e.g. every 500ms)
 
@@ -82,9 +82,10 @@ void inactivityHandler();                     // prepares sleep mode
 void dormantUntilInterrupt(int8_t *wake_interrupt_gpios, int8_t amt_gpios); // puts the device into dormant mode
 void userActivity();                          // handles user interaction: resets inactivity counter
 
-/**
- * @name Utility Functions
- */
+/*
+
+// Utility Functions
+// These functions might become useful to squeeze out some more uA for low-power operation ....
 
 void reinitAll(); // reinitializes all peripherals and settings after waking up
 void readPullState(uint pin, bool &pullUp, bool &pullDown); // reads the pull-up/pull-down state of a given GPIO pin.
@@ -92,6 +93,8 @@ void disablePeripherals(); // disables and deinitializes all peripherals
 void loadPeripherals();    // restores previously saved peripheral configurations
 void savePeripherals();    // saves the current state of peripherals for restoration
 void printPeripherals();   // prints the current peripheral configuration (debugging)
+ 
+*/
 
 #endif // LPW_FUNCS_H
 #endif // not FLIPMOUSE
