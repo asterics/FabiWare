@@ -187,6 +187,8 @@ void setup() {
 
   // NOTE: changed for RP2040!  TBD: why does setBTName damage the console UART TX ??
   // setBTName(moduleName);             // if BT-module installed: set advertising name 
+  Mouse.begin();
+  Joystick.begin();
   setKeyboardLayout(slotSettings.kbdLayout); //load keyboard layout from slot
 
   initDisplay();
