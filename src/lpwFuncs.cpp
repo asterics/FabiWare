@@ -237,8 +237,6 @@ void configureGPIOForSleep() {
    
 }
 
-
-
 /**
  * @name dormantUntilInterrupt
  * @brief Puts the device into dormant mode until one of the specified GPIO interrupt wakes it up.

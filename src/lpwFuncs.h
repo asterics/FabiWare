@@ -21,74 +21,31 @@
 
 #ifdef RP2350   // low power support only available for RP2350
 
+    #include "hardware/gpio.h"
 
-#include "hardware/gpio.h"
+    #define inactivityTimeMinutes 3
+    #define inactivityTimeSeconds 0
 
-/**
- * @name PinConfig structure
- * @brief saves the state of the GPIO pins for sleep / dormant mode.
- */
-struct PinConfig
-{
-    gpio_function_t func; // The GPIO function (GPIO_FUNC_SIO, GPIO_FUNC_I2C, etc.)
-    bool isOutput;        // Direction: true=output, false=input
-    bool pullUp;          // Whether pull-up is enabled
-    bool pullDown;        // Whether pull-down is enabled
-};
+    #define BATTERY_AVERAGING     4    // number of battery measurements to be averaged  (averaging period see BATTERY_UPDATE_INTERVAL, e.g. every 500ms)
+    #define MCPSTAT_HIGHZ     0
+    #define MCPSTAT_LOW       1
+    #define MCPSTAT_HIGH      2
+    #define MCPSTAT_UNDEFINED 3
+    #define CYW43_WL_GPIO_VBUS_PIN 2
 
-/**
- * @name Time Definitions
- * @brief Constants for inactivity time configurations.
- */
-#define inactivityTimeMinutes 3
-#define inactivityTimeSeconds 0
+    bool detectUSB();
+    void enable3V3();  // enable the 3.3V power rail
+    void disable3V3(); // disable the 3.3V power rail
+    void enableBatteryMeasurement();      // enables battery voltage measurement circuitry 
+    void disableBatteryMeasurement();     // disables battery voltage measurement circuitry
+    uint8_t batteryPresenceDetector();    // periodically checks battery status, including battery presence
+    int8_t getBatteryPercentage();        // checks battery-% based on a predetermined interval; presupposes presence of battery
+    uint16_t readPercentage();            // reads and returns mapped battery percentage (0-100%)
+    void performBatteryManagement();      // must be called periodically (e.g. twice a second) from the main loop
 
-#define BATTERY_AVERAGING     4    // number of battery measurements to be averaged  (averaging period see BATTERY_UPDATE_INTERVAL, e.g. every 500ms)
+    void inactivityHandler();                     // prepares sleep mode
+    void dormantUntilInterrupt(int8_t *wake_interrupt_gpios, int8_t amt_gpios); // puts the device into dormant mode
+    void userActivity();                          // handles user interaction: resets inactivity counter
 
-#define MCPSTAT_HIGHZ     0
-#define MCPSTAT_LOW       1
-#define MCPSTAT_HIGH      2
-#define MCPSTAT_UNDEFINED 3
-#define CYW43_WL_GPIO_VBUS_PIN 2
-
-
-/**
- * @name Power supply management functions
- */
-bool detectUSB();
-void enable3V3();  // enable the 3.3V power rail
-void disable3V3(); // disable the 3.3V power rail
-
-/**
- * @name Battery Management Functions
- */
-void enableBatteryMeasurement();      // enables battery voltage measurement circuitry 
-void disableBatteryMeasurement();     // disables battery voltage measurement circuitry
-uint8_t batteryPresenceDetector();    // periodically checks battery status, including battery presence
-int8_t getBatteryPercentage();        // checks battery-% based on a predetermined interval; presupposes presence of battery
-uint16_t readPercentage();            // reads and returns mapped battery percentage (0-100%)
-void performBatteryManagement();      // must be called periodically (e.g. twice a second) from the main loop
-
-/**
- * @name Inactivity Management Functions
- */
-void inactivityHandler();                     // prepares sleep mode
-void dormantUntilInterrupt(int8_t *wake_interrupt_gpios, int8_t amt_gpios); // puts the device into dormant mode
-void userActivity();                          // handles user interaction: resets inactivity counter
-
-/*
-
-// Utility Functions
-// These functions might become useful to squeeze out some more uA for low-power operation ....
-
-void reinitAll(); // reinitializes all peripherals and settings after waking up
-void readPullState(uint pin, bool &pullUp, bool &pullDown); // reads the pull-up/pull-down state of a given GPIO pin.
-void disablePeripherals(); // disables and deinitializes all peripherals
-void loadPeripherals();    // restores previously saved peripheral configurations
-void savePeripherals();    // saves the current state of peripherals for restoration
-void printPeripherals();   // prints the current peripheral configuration (debugging)
- 
-*/
-
+    #endif // RP2350
 #endif // LPW_FUNCS_H
-#endif // not FLIPMOUSE
