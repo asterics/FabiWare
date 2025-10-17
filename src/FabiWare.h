@@ -23,7 +23,7 @@
 #define _FabiWare_H_
 
 // Important: update the version string with every important firmware change!
-#define VERSION_STRING "v3.7"
+#define VERSION_STRING "v3.7.1"
 
 // Note: Set the target device (FLIPMOUSE, FABI or FLIPPAD) in platformio.ini (e.g. -DFABI)!
 //       Also, BLE Joystick support for FABI can be configured in platformio.ini
