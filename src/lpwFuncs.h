@@ -62,18 +62,12 @@ void disable3V3(); // disable the 3.3V power rail
 /**
  * @name Battery Management Functions
  */
+void enableBatteryMeasurement();      // enables battery voltage measurement circuitry 
+void disableBatteryMeasurement();     // disables battery voltage measurement circuitry
 uint8_t batteryPresenceDetector();    // periodically checks battery status, including battery presence
 int8_t getBatteryPercentage();        // checks battery-% based on a predetermined interval; presupposes presence of battery
-void initBattery();                   // initializes battery-related components
-void deinitBattery();                 // deinitializes battery-related components for power saving
 uint16_t readPercentage();            // reads and returns mapped battery percentage (0-100%)
 void performBatteryManagement();      // must be called periodically (e.g. twice a second) from the main loop
-
-/**
- * @name Power Source Functions (voltage divider)
- */
-void enableBattMeasure();             // enables battery voltage measurement circuitry 
-void disableBattMeasure();            // disables battery voltage measurement circuitry
 
 /**
  * @name Inactivity Management Functions

@@ -114,6 +114,7 @@ struct SensorData sensorData {
 struct SlotSettings slotSettings;             // contains all slot settings
 uint8_t workingmem[WORKINGMEM_SIZE];          // working memory (command parser, IR-rec/play)
 uint8_t actSlot = 0;                          // number of current slot
+uint8_t goingToSleep = 0;                    // flag to indicate that the device is going to sleep mode
 
 /*
   Handling I2C devices for check if something changed (will reset device, e.g. if external sensors are connected)
@@ -143,7 +144,7 @@ void setup() {
   #ifdef RP2350    // low power / battery support only available for RP2350
     enable3V3();   // turn on power suppy for peripherals
     delay(50);     // some time to stabilize the power supply
-    initBattery(); // init GPIOs for battery management
+    enableBatteryMeasurement(); // init GPIOs for battery management
   #endif  
 
   #ifndef FLIPMOUSE  // if not using FlipMouse: set alternative pins for I2C interface   
@@ -297,7 +298,12 @@ void loop() {
    @return none
 */
 void setup1() {
-  delay(50);  // some time to stabilize the power supply
+  delay(250);  // some time to let core0 initialize
+
+  #ifdef DEBUG_ACTIVITY_LED
+    pinMode(LED_BUILTIN,OUTPUT);
+    digitalWrite(LED_BUILTIN,HIGH); // LED on to indicate core1 is running
+  #endif
   
   // enable Wire1 I2C interface (used by Core1 for sensors)
   #ifndef FLIPMOUSE
@@ -314,10 +320,6 @@ void setup1() {
     delay(3000);  // allow some time for serial interface to come up
   #endif
 
-  #ifdef DEBUG_ACTIVITY_LED
-    pinMode(LED_BUILTIN,OUTPUT);
-  #endif
-
   initSensors();
   if (getForceSensorType()==FORCE_NAU7802)
     setSensorBoard(slotSettings.sb); // apply sensorboard settings
@@ -331,6 +333,11 @@ void setup1() {
    @return none
 */
 void loop1() {
+ 
+  if (goingToSleep) {
+    delay(10);
+    return; // if going to sleep, skip sensor updates
+  }
 
   // check if there is a message from the other core (sensorboard change, profile ID)
   if (rp2040.fifo.available()) {
