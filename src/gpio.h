@@ -34,9 +34,7 @@
   #define ANALOG_PRESSURE_SENSOR_PIN A3   // input pin if an analog pressure sensor is used with FlipMouse3 PCB 
 #else 
   #define NUMBER_OF_PHYSICAL_BUTTONS 5      // number of physical switches for FABI/FlipPad
-  #define NUMBER_OF_WAKEUP_PINS 7           // number of pins that can wake up FABI from sleep
   #define PHYSICAL_BUTTON_MAP {11,9,8,4,3}
-  #define WAKEUP_PIN_MAP {11,9,8,4,3,26,27}
   #define NEOPIXEL_PIN   10
   #define TONE_PIN        2    
   #define IR_LED_PIN     14
@@ -72,7 +70,12 @@
    which shall be accessed from other modules
 */
 extern int8_t  input_map[NUMBER_OF_PHYSICAL_BUTTONS];  // maps the button number to physical pin
-extern int8_t  wakeup_pin_map[NUMBER_OF_WAKEUP_PINS];  // maps the wakeup pin number to physical pin
+
+#ifdef RP2350
+  #define NUMBER_OF_WAKEUP_PINS 7           // number of pins that can wake up FABI from sleep
+  #define WAKEUP_PIN_MAP {11,9,8,4,3,26,27}
+   extern int8_t  wakeup_pin_map[NUMBER_OF_WAKEUP_PINS];  // maps the wakeup pin number to physical pin
+#endif
 
 /**
    @name initGPIO
