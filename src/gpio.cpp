@@ -33,8 +33,14 @@ extern uint8_t actSlot;
 
 void initGPIO() 
 {
-  for (int i = 0; i < NUMBER_OF_PHYSICAL_BUTTONS; i++) // initialize physical buttons and bouncers
-  pinMode (input_map[i], INPUT_PULLUP);   // configure the pins for input mode with pullup resistors
+  for (int i = 0; i < NUMBER_OF_PHYSICAL_BUTTONS; i++) { // initialize physical buttons and bouncers
+    //if one GPIO is locked for serial printing, don't init it as GPIO
+    #ifdef DEBUG_LOCK_GPIO    
+      if(input_map[i] != DEBUG_LOCK_GPIO) pinMode (input_map[i], INPUT_PULLUP);   // configure the pins for input mode with pullup resistors
+    #else
+      pinMode (input_map[i], INPUT_PULLUP);   // configure the pins for input mode with pullup resistors
+    #endif
+  }
 
   pixels.begin();
   pixels.setBrightness(127);
