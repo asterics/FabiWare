@@ -188,6 +188,7 @@ struct SensorData {
 extern alarm_pool_t *app_alarm_pool;
 extern char moduleName[];
 extern uint8_t actSlot;
+extern bool useI2CasGPIO;
 extern uint8_t goingToSleep;
 extern uint8_t addonUpgrade;
 extern struct GlobalSettings globalSettings;

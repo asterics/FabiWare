@@ -114,6 +114,7 @@ struct SensorData sensorData {
 struct SlotSettings slotSettings;             // contains all slot settings
 uint8_t workingmem[WORKINGMEM_SIZE];          // working memory (command parser, IR-rec/play)
 uint8_t actSlot = 0;                          // number of current slot
+bool useI2CasGPIO = false;                     // if set, we will use the SDA/SCL lines of Wire1 as GPIOs, set when INTERNAL_ADC is used and no I2C devices detected on startup.
 uint8_t goingToSleep = 0;                    // flag to indicate that the device is going to sleep mode
 
 /*
@@ -121,7 +122,7 @@ uint8_t goingToSleep = 0;                    // flag to indicate that the device
  */
 uint8_t devicesWire[8] = {0};                 // active I2C devices on Wire, see supported_devices[]
 uint8_t devicesWire1[8] = {0};                 // active I2C devices on Wire1, see supported_devices[]
-void testI2Cdevices(TwoWire *interface, uint8_t *device_list);
+int testI2Cdevices(TwoWire *interface, uint8_t *device_list);
 
 /**
    @name setup
@@ -300,6 +301,8 @@ void loop() {
 void setup1() {
   delay(250);  // some time to let core0 initialize
 
+  int i2cDevices = 0;
+
   #ifdef DEBUG_ACTIVITY_LED
     pinMode(LED_BUILTIN,OUTPUT);
     digitalWrite(LED_BUILTIN,HIGH); // LED on to indicate core1 is running
@@ -314,7 +317,7 @@ void setup1() {
   Wire1.setClock(400000);  // use 400kHz I2C clock
 
   //check the I2C bus for active devices, add to array
-  testI2Cdevices(&Wire1,devicesWire1);
+  i2cDevices = testI2Cdevices(&Wire1,devicesWire1);
 
   #ifdef DEBUG_DELAY_STARTUP
     delay(3000);  // allow some time for serial interface to come up
@@ -323,6 +326,20 @@ void setup1() {
   initSensors();
   if (getForceSensorType()==FORCE_NAU7802)
     setSensorBoard(slotSettings.sb); // apply sensorboard settings
+
+  #ifndef FLIPMOUSE
+  //using external joystick via INTERNAL_ADC and no I2C devices: use pins as GPIO.
+  if(getForceSensorType() == FORCE_INTERNAL_ADC  && i2cDevices == 0) {
+    useI2CasGPIO = true;
+    //Serial.println("I2C->GPIO");
+    Wire1.end();
+    pinMode(PIN_WIRE1_SDA_,INPUT_PULLUP);
+    pinMode(PIN_WIRE1_SCL_,INPUT_PULLUP);
+    //add SDA/SCL as wakeup pins
+    wakeup_pin_map[NUMBER_OF_WAKEUP_PINS-2] =  PIN_WIRE1_SDA_;
+    wakeup_pin_map[NUMBER_OF_WAKEUP_PINS-1] =  PIN_WIRE1_SCL_;
+  }
+  #endif
 
   // initBlink(10,20);  // first signs of life!
 }
@@ -365,28 +382,33 @@ void loop1() {
   #endif
 
   // every 1s: check for changed I2C devices. TBD: for FABI only?
+  #ifndef FLIPMOUSE
   NB_DELAY_START(i2cscan, 1000)
-    //create a copy of list before checking again
-    uint8_t olddevices[8];
-    memcpy(olddevices, devicesWire1, 8);
-    //check again
-    testI2Cdevices(&Wire1, devicesWire1);
-    //check if they match, if not -> restart
-    if (memcmp(olddevices, devicesWire1, 8) != 0)
-    {
-      Serial.println("Devices on Wire1 changed -> restarting!");
-      watchdog_reboot(0, 0, 10);
-      while (1)
+    //check only if we are NOT using SDA/SCL as GPIOs...
+    if(!useI2CasGPIO) {
+      //create a copy of list before checking again
+      uint8_t olddevices[8];
+      memcpy(olddevices, devicesWire1, 8);
+      //check again
+      testI2Cdevices(&Wire1, devicesWire1);
+      //check if they match, if not -> restart
+      if (memcmp(olddevices, devicesWire1, 8) != 0)
       {
-        continue;
+        Serial.println("Devices on Wire1 changed -> restarting!");
+        watchdog_reboot(0, 0, 10);
+        while (1)
+        {
+          continue;
+        }
       }
     }
   NB_DELAY_END
+  #endif
 
   delay(1); // core1: sleep a bit ...  
 }
 
-void testI2Cdevices(TwoWire *interface, uint8_t *device_list) {
+int testI2Cdevices(TwoWire *interface, uint8_t *device_list) {
   int devicenr = 0;     //currently used I2C address index of supported_devices[]
   int devicecount = 0;  //count of found devices, used as offset in active devices (devicesWire[])
 
@@ -406,4 +428,6 @@ void testI2Cdevices(TwoWire *interface, uint8_t *device_list) {
     //next address to be tested
     devicenr++;
   }
+
+  return devicecount;
 }
