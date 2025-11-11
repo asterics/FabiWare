@@ -129,12 +129,19 @@ void initButtons() {
 
 void handlePress (int buttonIndex)   // a button was pressed
 {
+  #ifdef DEBUG_OUTPUT_FULL
+    Serial.print("P: "); Serial.println(buttonIndex);
+    Serial.print(buttons[buttonIndex].mode); Serial.print(" "); Serial.print(buttons[buttonIndex].value); Serial.print(" "); Serial.println(buttonKeystrings[buttonIndex]);
+  #endif
   buttonStates |= (1<<buttonIndex); //save for reporting
   performCommand(buttons[buttonIndex].mode, buttons[buttonIndex].value, buttonKeystrings[buttonIndex], 1);
 }
 
 void handleRelease (int buttonIndex)    // a button was released: deal with "sticky"-functions
 {
+  #ifdef DEBUG_OUTPUT_FULL
+    Serial.print("R: "); Serial.println(buttonIndex);
+  #endif
   buttonStates &= ~(1<<buttonIndex); //save for reporting
   switch (buttons[buttonIndex].mode) {
     // release mouse actions
