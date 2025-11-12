@@ -335,9 +335,6 @@ void setup1() {
     Wire1.end();
     pinMode(PIN_WIRE1_SDA_,INPUT_PULLUP);
     pinMode(PIN_WIRE1_SCL_,INPUT_PULLUP);
-    //add SDA/SCL as wakeup pins
-    wakeup_pin_map[NUMBER_OF_WAKEUP_PINS-2] =  PIN_WIRE1_SDA_;
-    wakeup_pin_map[NUMBER_OF_WAKEUP_PINS-1] =  PIN_WIRE1_SCL_;
   }
   #endif
 
