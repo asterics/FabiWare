@@ -28,7 +28,6 @@ extern "C" {
 }
 
 unsigned long inactivityTime=0;  // measures user inactivity (in ms)
-struct PinConfig pinBackup[29];  // array to save pin configurations
 
 /**
  * @name detectUSB
@@ -148,7 +147,8 @@ void performBatteryManagement()  {
   #endif
 
   // check user inactivity, possibly initiate power save mode
-  if (!sensorData.usbConnected) {
+
+  if (!sensorData.usbConnected || DEBUG_SLEEP_WITH_USB) {
     inactivityTime += BATTERY_UPDATE_INTERVAL;
     if (inactivityTime >= (inactivityTimeMinutes*60000 + inactivityTimeSeconds*1000))
       inactivityHandler();  // time to go to sleep...
@@ -171,49 +171,71 @@ void enable3V3() {
  */
 void disable3V3() {
   gpio_put(LDO_ENABLE_PIN, false);
-  gpio_set_dir(LDO_ENABLE_PIN, false);
+  // gpio_set_dir(LDO_ENABLE_PIN, false);
   // gpio_deinit(LDO_ENABLE_PIN);
 }
 
 /**
- * @name initBattery
- * @brief Initializes battery-related power-saving mechanisms and peripherals.
+ * @name enableBatteryMeasurement
+ * @brief Initializes battery-measurement related pins.
  */
-void initBattery() {
+void enableBatteryMeasurement() {
   detectUSB();
-  gpio_init(CHARGE_STAT_PIN);
-  enableBattMeasure();
-}
-
-/**
- * @name deinitBattery
- * @brief Deinitializes battery-related peripherals.
- */
-void deinitBattery() {
-  gpio_deinit(CHARGE_STAT_PIN);
-  disableBattMeasure();
-}
-
-/**
- * @name disableBattMeasure
- * @brief Disables the battery measurement circuitry.
- */
-void disableBattMeasure() {
-  gpio_set_dir(V_BATT_MEASURE_PIN, false);
-  gpio_deinit(V_BATT_MEASURE_PIN);
-  gpio_disable_pulls(V_BATT_MEASURE_PIN);
-}
-
-/**
- * @name enableBattMeasure
- * @brief Enables the battery measurement circuitry.
- */
-void enableBattMeasure() {
   gpio_init(CHARGE_STAT_PIN);
   gpio_init(V_BATT_VD_SWITCH_PIN);
   gpio_set_dir(V_BATT_VD_SWITCH_PIN, false);
   gpio_init(V_BATT_MEASURE_PIN);
   gpio_set_dir(V_BATT_MEASURE_PIN, false);
+}
+
+/**
+ * @name disableBatteryMeasurement
+ * @brief Deinitializes battery-related pins
+ */
+void disableBatteryMeasurement() {
+  gpio_deinit(CHARGE_STAT_PIN);
+  gpio_set_dir(V_BATT_MEASURE_PIN, false);
+  gpio_deinit(V_BATT_MEASURE_PIN);
+  gpio_disable_pulls(V_BATT_MEASURE_PIN);
+}
+
+
+/**
+ * @name configureGPIOForSleep
+ * @brief Configure all GPIO pins for minimum power consumption during sleep
+ */
+void configureGPIOForSleep() {
+  // Configure all GPIO pins for low power
+  for (int pin = 0; pin < 30; pin++) {
+    // Skip pins that are used for wake-up (input_map pins)
+    bool isWakeupPin = false;
+    for (int i = 0; i < NUMBER_OF_WAKEUP_PINS; i++) {
+      if (wakeup_pin_map[i] == pin) {
+        isWakeupPin = true;
+        break;
+      }
+    }
+    
+    // Skip special pins
+    if (pin == 23 || pin == 24 || pin == 25) continue; // SMPS, debug pins
+    if (pin == LDO_ENABLE_PIN) continue; // Keep LDO control pin
+    if (pin == V_BATT_MEASURE_PIN || pin == CHARGE_STAT_PIN) continue; // Battery pins
+    
+    if (isWakeupPin) {
+      // Wake-up pins: configure as input with pull-up (buttons typically pull to ground)
+      gpio_init(pin);
+      gpio_set_dir(pin, GPIO_IN);
+      gpio_pull_up(pin);
+    } else {
+      // All other pins: configure as input with pull-down to prevent floating
+      gpio_init(pin);
+      gpio_set_dir(pin, GPIO_IN);
+      gpio_pull_down(pin);
+      // Optionally deinit unused pins completely:
+      // gpio_deinit(pin);
+    }
+  }
+   
 }
 
 /**
@@ -223,7 +245,8 @@ void enableBattMeasure() {
  */
 void dormantUntilInterrupt(int8_t *wake_interrupt_gpios, int8_t amt_gpios) {
   sleep_run_from_lposc(); // use low-power oscillator for minimal power consumption
-  sleep_goto_dormant_until_edge_high(wake_interrupt_gpios, amt_gpios); // wait for rising edge interrupt
+  sleep_goto_dormant_until_pin(wake_interrupt_gpios, amt_gpios, true, false);
+  //sleep_goto_dormant_until_edge_high(wake_interrupt_gpios, amt_gpios); // wait for rising edge interrupt
   sleep_power_up(); // restore sys clocks after waking up (using rosc -> jump starts processor)
   delay(100); // allow some time for system to stabilize after restoring sys clocks
 }
@@ -234,37 +257,40 @@ void dormantUntilInterrupt(int8_t *wake_interrupt_gpios, int8_t amt_gpios) {
  */
 void inactivityHandler() {
   inactivityTime=0;
+  goingToSleep=1;   // inform core1 loop that we are going to sleep
   saveLastActiveSlotNumber(); 
-  deinitBattery();
-  #ifndef FLIPMOUSE
-    MouseBLE.end();     // turn off Bluetooth
-  #endif
-  #ifdef DEBUG_BATTERY_MANAGEMENT
-    Serial.println("goodbye, going to sleep!");
-  #endif 
-  Serial.flush();
-  Serial.end();
   displayMessage((char*)"ByeBye");
   delay(2000);   // time for the user to read the message
-  disable3V3();  // shut down peripherals
-  digitalWrite(LED_BUILTIN,LOW);  // make sure the internal LED is off
 
-  dormantUntilInterrupt(input_map, NUMBER_OF_PHYSICAL_BUTTONS); // enter sleepMode, use input_map pins to wakeup!
+  Serial.flush();
+  Serial.end();
+  Wire.end();
+  Wire1.end();
+ 
+  digitalWrite(LED_BUILTIN,LOW);  // make sure the internal LED is off 
+
+  #ifdef RP2350
+    MouseBLE.end();     // turn off BLE Mouse
+    KeyboardBLE.end();  // turn off BLE Keyboard
+     #ifdef FABI_BLEJOYSTICK_ENABLED
+      JoystickBLE.end(); // turn off BLE Joystick if enabled
+    #endif
+    delay(100);  // allow some time for BLE stack to shut down properly
+    cyw43_arch_deinit();  // shutdown the CYW43 WiFi/Bluetooth chip
+    // Note: do not use the LED after cyw43_arch_deinit() - this would bring up the cyw43-chip again !!
+  #endif
+
+  makeTone(TONE_WAKEUP,0);    // play startup tone
+  disableBatteryMeasurement();
+  disable3V3();  // shut down peripherals
+  delay(100);
+  configureGPIOForSleep(); // configure all GPIOs for low power consumption
+  dormantUntilInterrupt(wakeup_pin_map, NUMBER_OF_WAKEUP_PINS);   // enter sleepMode!
   //  <--   now sleeping!  
-  makeTone(TONE_WAKEUP,0);  // play startup melody
+
+  makeTone(TONE_WAKEUP,0);    // play startup tone
   watchdog_reboot(0, 0, 10);  // cause a watchdog reset to wake everything up!
   while (1) { continue; }     
-
-  /*
-    // Note: this soft startup did not work ... TBD!
-    Serial.begin(115200);
-    delay(3000);  // allow some time for serial interface to come up
-    enable3V3();
-    initBattery();
-    displayReinit();
-    initButtons();
-    initDebouncers();
-  */
 }
 
 /**
@@ -274,172 +300,5 @@ void inactivityHandler() {
 void userActivity() { // Call of this function can be found in line 181, buttons.cpp
   inactivityTime=0;   // reset the inactivity counter!
 }
-
-
-/**
- * @name savePeripherals
- * @brief Saves the current GPIO configuration for all pins.
- */
-void savePeripherals() {
-  for (uint pin = 0; pin < 29; pin++) {
-    if (pin == 23 || pin == 24 || pin == 25) continue; // skip specific pins
-    bool pullUp, pullDown;
-    pinBackup[pin].func = gpio_get_function(pin);
-    pinBackup[pin].isOutput = (gpio_get_dir(pin) == GPIO_OUT);
-    readPullState(pin, pullUp, pullDown);
-    pinBackup[pin].pullUp = pullUp;
-    pinBackup[pin].pullDown = pullDown;
-  }
-  Serial.println("Saved SIO pin configs.");
-}
-
-/**
- * @name disablePeripherals
- * @brief Disables all GPIO peripherals by deinitializing the pins.
- */
-void disablePeripherals() {
-  for (uint pin = 0; pin < 29; pin++) {
-    if (pin == 23 || pin == 24 || pin == 25) continue; // skip specific pins
-    if (pinBackup[pin].func == GPIO_FUNC_SIO) {
-      gpio_disable_pulls(pin);
-      gpio_deinit(pin);
-    }
-  }
-}
-
-/**
- * @name printPeripherals
- * @brief Prints the current GPIO configuration to the Serial monitor.
- */
-void printPeripherals() {
-  for (int pin = 0; pin < 29; pin++) {
-    if (pin == 23 || pin == 24 || pin == 25) continue;
-    Serial.print(pin);
-    switch (pinBackup[pin].func) {
-      case GPIO_FUNC_HSTX: Serial.print(": HSTX"); break;
-      case GPIO_FUNC_SPI: Serial.print(": SPI"); break;
-      case GPIO_FUNC_UART: Serial.print(": UART"); break;
-      case GPIO_FUNC_I2C: Serial.print(": I2C"); break;
-      case GPIO_FUNC_PWM: Serial.print(": PWM"); break;
-      case GPIO_FUNC_SIO: Serial.print(": SIO"); break;
-      case GPIO_FUNC_PIO0: Serial.print(": PIO0"); break;
-      case GPIO_FUNC_PIO1: Serial.print(": PIO1"); break;
-      case GPIO_FUNC_PIO2: Serial.print(": PIO2"); break;
-      default: Serial.print(": NULL"); break;
-    }
-    Serial.print(", ");
-    Serial.print(pinBackup[pin].isOutput ? "OUT" : "IN");
-    if (pinBackup[pin].pullUp) Serial.print(", pullUp");
-    if (pinBackup[pin].pullDown) Serial.print(", pullDown");
-    Serial.println();
-  }
-}
-
-/**
- * @name loadPeripherals
- * @brief Restores the saved GPIO configuration for all pins.
- */
-void loadPeripherals() {
-  for (uint pin = 0; pin < 29; pin++) {
-    if (pin == 23 || pin == 24 || pin == 25) continue;
-    if (pinBackup[pin].func == GPIO_FUNC_SIO) {
-      gpio_init(pin);
-      gpio_set_function(pin, pinBackup[pin].func);
-      gpio_set_dir(pin, pinBackup[pin].isOutput);
-      if (pinBackup[pin].pullUp) gpio_pull_up(pin);
-      if (pinBackup[pin].pullDown) gpio_pull_down(pin);
-    }
-  }
-}
-
-// #define DORMANT_SOURCE_LPOSC 1
-// void goSleep(uint gpio_pin, bool edge, bool high){
-//   uint src_hz = 32 * KHZ;
-//   uint clk_ref_src = CLOCKS_CLK_REF_CTRL_SRC_VALUE_LPOSC_CLKSRC;
-//   clock_configure(clk_ref, clk_ref_src, 0, src_hz, src_hz);
-//   clock_configure(clk_sys, CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLK_REF, 0, src_hz, src_hz);
-//   clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS, src_hz, src_hz);
-
-//   clock_stop(clk_adc);
-//   clock_stop(clk_usb);
-//   clock_stop(clk_hstx);
-//   pll_deinit(pll_sys);
-//   pll_deinit(pll_usb);
-
-//   // // Assuming both xosc and rosc are running at the moment
-//   //   if (dormant_source == DORMANT_SOURCE_XOSC) {
-//   //       // Can disable rosc
-//   //       rosc_disable();
-//   //   } else {
-//   //       // Can disable xosc
-//   //       xosc_disable();
-//   //   }
-
-//   // the lines up above assume RP2040 that has no LPOSC so it always disables xosc when
-//   // there's a will to use LPOSC as dormant source:
-//   xosc_disable();
-
-//   bool low = !high;
-//   bool level = !edge;
-
-//   uint32_t event = 0
-
-//   if (level && low) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_LEVEL_LOW_BITS;
-//   if (level && high) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_LEVEL_HIGH_BITS;
-//   if (edge && high) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_EDGE_HIGH_BITS;
-//   if (edge && low) event = IO_BANK0_DORMANT_WAKE_INTE0_GPIO0_EDGE_LOW_BITS;
-
-//   gpio_init(gpio_pin);
-//   gpio_set_input_enabled(gpio_pin, true);
-//   gpio_set_input_hysteresis_enabled(gpio_pin, true);
-//   gpio_set_dormant_irq_enabled(gpio_pin, event, true);
-
-//   // here belongs going dormant()
-
-//   /** @note when using crystal oscillator as dormant source */
-//   // xosc_dormant();
-
-//   /** @note when using ring oscillator as dormant source */
-//   // hw_clear_bits(&rosc_hw->status, ROSC_STATUS_BADWRITE_BITS);
-
-//   // if !(rosc_hw->status & ROSC_STATUS_BADWRITE_BITS){
-//   //   rosc_hw->dormant = ROSC_DORMANT_VALUE_DORMANT;
-
-//   //   if !(rosc_hw->status & ROSC_STATUS_BADWRITE_BITS){
-//   //     // all good.
-//   //   } else {
-//   //     // something went wrong.
-//   //   }
-//   //   // wait for ring oscillator to become stable once woken up
-//   //   while(!(rosc_hw->status & ROSC_STATUS_STABLE_BITS));
-//   // } else {
-//   //   // something went wrong.
-//   // }
-
-//   // EXECUTION WILL STOP HERE.
-
-//   gpio_acknowledge_irq(gpio_pin, event);
-//   gpio_set_input_enabled(gpio_pin, false);
-
-  
-//   // To be called after waking up from sleep/dormant mode to restore system clocks properly
-//   // if !(rosc_hw->status & ROSC_STATUS_BADWRITE_BITS){
-//   //   rosc_hw->ctrl = ROSC_CTRL_ENABLE_BITS;
-
-//   //   if !(rosc_hw->status & ROSC_STATUS_BADWRITE_BITS){
-//   //     // all good.
-//   //   } else {
-//   //     // something went wrong.
-//   //   }
-//   //   // wait for ring oscillator to become stable once woken up
-//   //   while(!(rosc_hw->status & ROSC_STATUS_STABLE_BITS));
-//   // } else {
-//   //   // something went wrong.
-//   // }
-//   clocks_init();
-
-//   delay(1000);
-// }
-
 
 #endif

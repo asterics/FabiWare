@@ -71,6 +71,12 @@
 */
 extern int8_t  input_map[NUMBER_OF_PHYSICAL_BUTTONS];  // maps the button number to physical pin
 
+#ifdef RP2350
+  #define NUMBER_OF_WAKEUP_PINS 9           // number of pins that can wake up FABI from sleep
+  #define WAKEUP_PIN_MAP {11,9,8,4,3,26,27,18,19}
+   extern int8_t  wakeup_pin_map[NUMBER_OF_WAKEUP_PINS];  // maps the wakeup pin number to physical pin
+#endif
+
 /**
    @name initGPIO
    @brief initializes data direction of gpio pins

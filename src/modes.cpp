@@ -49,6 +49,14 @@ void handleUserInteraction()
     #endif
   }
 
+  #ifndef FLIPMOUSE
+  // SDA&SCL as GPIOs
+  if(useI2CasGPIO) {
+    handleButton(SIP_BUTTON, digitalRead(PIN_WIRE1_SDA_) == LOW ? 1 : 0);
+    handleButton(PUFF_BUTTON, digitalRead(PIN_WIRE1_SCL_) == LOW ? 1 : 0);
+  }
+  #endif
+
   #ifdef FLIPMOUSE
     // check "long-press" of internal button unpairing all BT hosts
     if (digitalRead(input_map[0]) == LOW) {

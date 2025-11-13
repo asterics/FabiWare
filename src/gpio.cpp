@@ -19,6 +19,10 @@
 #include <Adafruit_NeoPixel.h>
 
 int8_t  input_map[NUMBER_OF_PHYSICAL_BUTTONS] = PHYSICAL_BUTTON_MAP ;
+#ifdef RP2350
+  int8_t  wakeup_pin_map[NUMBER_OF_WAKEUP_PINS] = WAKEUP_PIN_MAP ;
+#endif
+
 uint8_t blinkCount = 0;
 uint8_t blinkTime = 0;
 uint8_t blinkStartTime = 0;

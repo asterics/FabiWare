@@ -114,13 +114,15 @@ struct SensorData sensorData {
 struct SlotSettings slotSettings;             // contains all slot settings
 uint8_t workingmem[WORKINGMEM_SIZE];          // working memory (command parser, IR-rec/play)
 uint8_t actSlot = 0;                          // number of current slot
+bool useI2CasGPIO = false;                     // if set, we will use the SDA/SCL lines of Wire1 as GPIOs, set when INTERNAL_ADC is used and no I2C devices detected on startup.
+uint8_t goingToSleep = 0;                    // flag to indicate that the device is going to sleep mode
 
 /*
   Handling I2C devices for check if something changed (will reset device, e.g. if external sensors are connected)
  */
 uint8_t devicesWire[8] = {0};                 // active I2C devices on Wire, see supported_devices[]
 uint8_t devicesWire1[8] = {0};                 // active I2C devices on Wire1, see supported_devices[]
-void testI2Cdevices(TwoWire *interface, uint8_t *device_list);
+int testI2Cdevices(TwoWire *interface, uint8_t *device_list);
 
 /**
    @name setup
@@ -147,7 +149,7 @@ void setup() {
   #ifdef RP2350    // low power / battery support only available for RP2350
     enable3V3();   // turn on power suppy for peripherals
     delay(50);     // some time to stabilize the power supply
-    initBattery(); // init GPIOs for battery management
+    enableBatteryMeasurement(); // init GPIOs for battery management
   #endif  
 
   #ifndef FLIPMOUSE  // if not using FlipMouse: set alternative pins for I2C interface   
@@ -191,6 +193,8 @@ void setup() {
 
   // NOTE: changed for RP2040!  TBD: why does setBTName damage the console UART TX ??
   // setBTName(moduleName);             // if BT-module installed: set advertising name 
+  Mouse.begin();
+  Joystick.begin();
   setKeyboardLayout(slotSettings.kbdLayout); //load keyboard layout from slot
 
   initDisplay();
@@ -299,11 +303,14 @@ void loop() {
    @return none
 */
 void setup1() {
-  //we do the enable3V3 in both setups.
-  #ifdef RP2350    // low power / battery support only available for RP2350
-    enable3V3();   // turn on power suppy for peripherals
-  #endif 
-  delay(50);  // some time to stabilize the power supply
+  delay(250);  // some time to let core0 initialize
+
+  int i2cDevices = 0;
+
+  #ifdef DEBUG_ACTIVITY_LED
+    pinMode(LED_BUILTIN,OUTPUT);
+    digitalWrite(LED_BUILTIN,HIGH); // LED on to indicate core1 is running
+  #endif
   
   // enable Wire1 I2C interface (used by Core1 for sensors)
   #ifndef FLIPMOUSE
@@ -314,19 +321,26 @@ void setup1() {
   Wire1.setClock(400000);  // use 400kHz I2C clock
 
   //check the I2C bus for active devices, add to array
-  testI2Cdevices(&Wire1,devicesWire1);
+  i2cDevices = testI2Cdevices(&Wire1,devicesWire1);
 
   #ifdef DEBUG_DELAY_STARTUP
     delay(3000);  // allow some time for serial interface to come up
   #endif
 
-  #ifdef DEBUG_ACTIVITY_LED
-    pinMode(LED_BUILTIN,OUTPUT);
-  #endif
-
   initSensors();
   if (getForceSensorType()==FORCE_NAU7802)
     setSensorBoard(slotSettings.sb); // apply sensorboard settings
+
+  #ifndef FLIPMOUSE
+  //using external joystick via INTERNAL_ADC and no I2C devices: use pins as GPIO.
+  if(getForceSensorType() == FORCE_INTERNAL_ADC  && i2cDevices == 0) {
+    useI2CasGPIO = true;
+    //Serial.println("I2C->GPIO");
+    Wire1.end();
+    pinMode(PIN_WIRE1_SDA_,INPUT_PULLUP);
+    pinMode(PIN_WIRE1_SCL_,INPUT_PULLUP);
+  }
+  #endif
 
   // initBlink(10,20);  // first signs of life!
 }
@@ -337,6 +351,11 @@ void setup1() {
    @return none
 */
 void loop1() {
+ 
+  if (goingToSleep) {
+    delay(10);
+    return; // if going to sleep, skip sensor updates
+  }
 
   // check if there is a message from the other core (sensorboard change, profile ID)
   if (rp2040.fifo.available()) {
@@ -364,28 +383,33 @@ void loop1() {
   #endif
 
   // every 1s: check for changed I2C devices. TBD: for FABI only?
+  #ifndef FLIPMOUSE
   NB_DELAY_START(i2cscan, 1000)
-    //create a copy of list before checking again
-    uint8_t olddevices[8];
-    memcpy(olddevices, devicesWire1, 8);
-    //check again
-    testI2Cdevices(&Wire1, devicesWire1);
-    //check if they match, if not -> restart
-    if (memcmp(olddevices, devicesWire1, 8) != 0)
-    {
-      Serial.println("Devices on Wire1 changed -> restarting!");
-      watchdog_reboot(0, 0, 10);
-      while (1)
+    //check only if we are NOT using SDA/SCL as GPIOs...
+    if(!useI2CasGPIO) {
+      //create a copy of list before checking again
+      uint8_t olddevices[8];
+      memcpy(olddevices, devicesWire1, 8);
+      //check again
+      testI2Cdevices(&Wire1, devicesWire1);
+      //check if they match, if not -> restart
+      if (memcmp(olddevices, devicesWire1, 8) != 0)
       {
-        continue;
+        Serial.println("Devices on Wire1 changed -> restarting!");
+        watchdog_reboot(0, 0, 10);
+        while (1)
+        {
+          continue;
+        }
       }
     }
   NB_DELAY_END
+  #endif
 
   delay(1); // core1: sleep a bit ...  
 }
 
-void testI2Cdevices(TwoWire *interface, uint8_t *device_list) {
+int testI2Cdevices(TwoWire *interface, uint8_t *device_list) {
   int devicenr = 0;     //currently used I2C address index of supported_devices[]
   int devicecount = 0;  //count of found devices, used as offset in active devices (devicesWire[])
 
@@ -407,4 +431,6 @@ void testI2Cdevices(TwoWire *interface, uint8_t *device_list) {
     //next address to be tested
     devicenr++;
   }
+
+  return devicecount;
 }
