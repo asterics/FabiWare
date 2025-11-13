@@ -29,6 +29,20 @@ uint8_t strongSipPuffState = STRONG_MODE_IDLE;
 */
 void handleMovement(); 
 
+bool noStrongPuffSpecialActions() {
+  return ( (buttons[STRONGPUFF_UP_BUTTON].mode == CMD_NC) &&
+           (buttons[STRONGPUFF_DOWN_BUTTON].mode == CMD_NC) &&
+           (buttons[STRONGPUFF_LEFT_BUTTON].mode == CMD_NC) &&
+           (buttons[STRONGPUFF_RIGHT_BUTTON].mode == CMD_NC));
+}
+
+bool noStrongSipSpecialActions() {
+  return ( (buttons[STRONGSIP_UP_BUTTON].mode == CMD_NC) &&
+           (buttons[STRONGSIP_DOWN_BUTTON].mode == CMD_NC) &&
+           (buttons[STRONGSIP_LEFT_BUTTON].mode == CMD_NC) &&
+           (buttons[STRONGSIP_RIGHT_BUTTON].mode == CMD_NC));
+}
+
 void handleUserInteraction()
 {
   static uint8_t pressureRising = 0, pressureFalling = 0;
@@ -82,8 +96,14 @@ void handleUserInteraction()
       if (sensorData.pressure < slotSettings.tp)
         waitStable++;
       else waitStable = 0;
-      if (waitStable >= STRONGMODE_STABLETIME)
-        strongSipPuffState = STRONG_MODE_STRONGPUFF_ACTIVE;
+      if (waitStable >= STRONGMODE_STABLETIME) {
+        if (noStrongPuffSpecialActions()) {
+          handlePress(STRONGPUFF_BUTTON);
+          handleRelease(STRONGPUFF_BUTTON);
+          strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
+          waitStable = 0;
+        } else strongSipPuffState = STRONG_MODE_STRONGPUFF_ACTIVE;
+      }
       break;
 
     case STRONG_MODE_STRONGPUFF_ACTIVE:    // strong puff mode active
@@ -126,8 +146,15 @@ void handleUserInteraction()
       if (sensorData.pressure > slotSettings.ts)
         waitStable++;
       else waitStable = 0;
-      if (waitStable >= STRONGMODE_STABLETIME)
-        strongSipPuffState = STRONG_MODE_STRONGSIP_ACTIVE;
+      if (waitStable >= STRONGMODE_STABLETIME) {
+        if (noStrongSipSpecialActions()) {
+          handlePress(STRONGSIP_BUTTON);
+          handleRelease(STRONGSIP_BUTTON);
+          strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
+          waitStable = 0;
+        } 
+        else strongSipPuffState = STRONG_MODE_STRONGSIP_ACTIVE;
+      }
       break;
 
     case STRONG_MODE_STRONGSIP_ACTIVE:   // strong sip mode active
