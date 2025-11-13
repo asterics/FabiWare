@@ -253,6 +253,9 @@ typedef char* uint_farptr_t_FM;
 
 #ifdef DEBUG_LOCK_GPIO
   #warning "GPIO pin locked for debugging, might disable one external button!"
+  #ifdef FLIPMOUSE
+    #error "Cannot lock GPIO for Serial port on a FLipMouse!"
+  #endif
 #endif
 
 #ifdef DEBUG_DELAY_STARTUP
