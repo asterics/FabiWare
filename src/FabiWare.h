@@ -74,6 +74,7 @@
 //#define DEBUG_OUTPUT_SENSORS 	 // enable sensors.cpp debugging, showing whats happening on sensor reading & init
 //#define DEBUG_DELAY_STARTUP 	 // enable a 3s delay after Serial.begin and before all the other stuff.
 #define DEBUG_ACTIVITY_LED 	   // enable blinking internal led signaling activity (in sensor loop, core1).
+#define DEBUG_SLEEP_WITH_USB false  /* if true, we will send the Pico to sleep even with USB connected */
 //#define DEBUG_PRESSURE_RAWVALUES // raw output of pressure values and filtered output
 //#define DEBUG_MPRLS_ERRORFLAGS // continously print error flags of MPRLS
 //#define DEBUG_BATTERY_MANAGEMENT 	 // enable a debug output for battery state detection and management.
@@ -188,6 +189,7 @@ struct SensorData {
 extern alarm_pool_t *app_alarm_pool;
 extern char moduleName[];
 extern uint8_t actSlot;
+extern bool useI2CasGPIO;
 extern uint8_t goingToSleep;
 extern uint8_t addonUpgrade;
 extern struct GlobalSettings globalSettings;
@@ -245,6 +247,9 @@ typedef char* uint_farptr_t_FM;
 #endif
 #ifdef DEBUG_MPRLS_ERRORFLAGS
   #warning "DEBUG_MPRLS_ERRORFLAGS is defined, do not release this way!"
+#endif
+#if DEBUG_SLEEP_WITH_USB == true
+  #warning "DEBUG_SLEEP_WITH_USB is true, don't release!"
 #endif
 
 #endif

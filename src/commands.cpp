@@ -339,7 +339,7 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
 #ifdef DEBUG_OUTPUT_FULL
       if (slotSettings.stickMode == STICKMODE_MOUSE)
         Serial.println("mouse function activated");
-      else if (slotSettings.stickMode >= STICKMODE_JOYSTICK_XY)
+      else if (slotSettings.stickMode >= STICKMODE_JOYSTICK_1)
         Serial.println("joystick function activated");
       else Serial.println("alternative functions activated");
 #endif

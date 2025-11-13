@@ -147,7 +147,8 @@ void performBatteryManagement()  {
   #endif
 
   // check user inactivity, possibly initiate power save mode
-  if (!sensorData.usbConnected) {
+
+  if (!sensorData.usbConnected || DEBUG_SLEEP_WITH_USB) {
     inactivityTime += BATTERY_UPDATE_INTERVAL;
     if (inactivityTime >= (inactivityTimeMinutes*60000 + inactivityTimeSeconds*1000))
       inactivityHandler();  // time to go to sleep...
@@ -244,7 +245,8 @@ void configureGPIOForSleep() {
  */
 void dormantUntilInterrupt(int8_t *wake_interrupt_gpios, int8_t amt_gpios) {
   sleep_run_from_lposc(); // use low-power oscillator for minimal power consumption
-  sleep_goto_dormant_until_edge_high(wake_interrupt_gpios, amt_gpios); // wait for rising edge interrupt
+  sleep_goto_dormant_until_pin(wake_interrupt_gpios, amt_gpios, true, false);
+  //sleep_goto_dormant_until_edge_high(wake_interrupt_gpios, amt_gpios); // wait for rising edge interrupt
   sleep_power_up(); // restore sys clocks after waking up (using rosc -> jump starts processor)
   delay(100); // allow some time for system to stabilize after restoring sys clocks
 }
