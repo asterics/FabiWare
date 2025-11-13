@@ -303,7 +303,7 @@ void setup1() {
   #ifdef RP2350    // low power / battery support only available for RP2350
     enable3V3();   // turn on power suppy for peripherals
   #endif 
-  delay(1000);  // some time to stabilize the power supply
+  delay(50);  // some time to stabilize the power supply
   
   // enable Wire1 I2C interface (used by Core1 for sensors)
   #ifndef FLIPMOUSE
