@@ -130,6 +130,10 @@ int testI2Cdevices(TwoWire *interface, uint8_t *device_list);
    @return none
 */
 void setup() {
+  // init if defined: debug interface
+  #ifdef DEBUG_OUT_INIT
+    DEBUG_OUT_INIT;
+  #endif
 
   // prepare synchronization of sensor data exchange between cores
   mutex_init(&(currentSensorDataCore1.sensorDataMutex));
@@ -200,7 +204,7 @@ void setup() {
   audioPlayback(0);  // announce first slot name message (if available)
 
   #ifdef DEBUG_OUTPUT_FULL 
-    Serial.print(moduleName); Serial.println(" ready !");
+    DEBUG_OUT.print(moduleName); DEBUG_OUT.println(" ready !");
   #endif
   
 }
@@ -417,8 +421,10 @@ int testI2Cdevices(TwoWire *interface, uint8_t *device_list) {
     uint8_t result = interface->endTransmission();
     //if found: add to array of active devices
     if (result == 0) {
-      //Serial.print("Found device @0x");
-      //Serial.println(supported_devices[devicenr],HEX);
+      #ifdef DEBUG_OUTPUT_I2C_SCAN
+        DEBUG_OUT.print("Found device @0x");
+        DEBUG_OUT.println(supported_devices[devicenr],HEX);
+      #endif
       device_list[devicecount] = supported_devices[devicenr];
       devicecount++;
     }

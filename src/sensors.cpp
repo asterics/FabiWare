@@ -113,17 +113,17 @@ void initSensors()
   uint8_t result = Wire1.endTransmission();
   if (result == 0) {
   #ifdef DEBUG_OUTPUT_SENSORS
-    Serial.println("SEN: found DPS310");
+    DEBUG_OUT.println("SEN: found DPS310");
   #endif
     // we found the DPS310 sensor, so use it!
     currentSensorDataCore1.pressureSensorType = PRESSURE_DPS310;
     configureDPS();
     #ifdef DEBUG_OUTPUT_SENSORS
-        Serial.println("SEN: setup DPS310 finished");
+        DEBUG_OUT.println("SEN: setup DPS310 finished");
     #endif
   } else {
     #ifdef DEBUG_OUTPUT_SENSORS
-        Serial.println("SEN: cannot find DPS310");
+        DEBUG_OUT.println("SEN: cannot find DPS310");
     #endif
   
     //detect if there is a MPRLS sensor connected to I2C (Wire)
@@ -131,18 +131,18 @@ void initSensors()
     result = Wire1.endTransmission();
     if (result == 0) {
     #ifdef DEBUG_OUTPUT_SENSORS
-      Serial.println("SEN: found MPRLS");
+      DEBUG_OUT.println("SEN: found MPRLS");
     #endif
       // we found the MPRLS sensor, so use it!
       currentSensorDataCore1.pressureSensorType = PRESSURE_MPRLS;
     } else {
       #ifdef DEBUG_OUTPUT_SENSORS
-        Serial.println("SEN: cannot find MPRLS");
+        DEBUG_OUT.println("SEN: cannot find MPRLS");
       #endif
       // check if an analog pressure sensor (e.g. MPX7007) is connected to the internal ADC
       if (!isAnalogPinFloating(ANALOG_PRESSURE_SENSOR_PIN)) {
         #ifdef DEBUG_OUTPUT_SENSORS
-          Serial.println("SEN: Pressure sensor connected to internal ADC");
+          DEBUG_OUT.println("SEN: Pressure sensor connected to internal ADC");
         #endif
         currentSensorDataCore1.pressureSensorType = PRESSURE_INTERNAL_ADC;
       }
@@ -163,7 +163,7 @@ void initSensors()
     PS.setIdleDetectionThreshold(500);
   } else {
   #ifdef DEBUG_OUTPUT_SENSORS
-    Serial.println("SEN: no pressure sensor connected");
+    DEBUG_OUT.println("SEN: no pressure sensor connected");
   #endif     
   } 
 
@@ -171,7 +171,7 @@ void initSensors()
   //NAU7802 init
   if (nau.begin(&Wire1)) {
     #ifdef DEBUG_OUTPUT_SENSORS
-        Serial.println("SEN: Found NAU7802");
+        DEBUG_OUT.println("SEN: Found NAU7802");
     #endif
     currentSensorDataCore1.forceSensorType = FORCE_NAU7802;
     pinMode (DRDY_PIN, INPUT);
@@ -193,13 +193,13 @@ void initSensors()
     YS.setAutoCalibrationMode(AUTOCALIBRATION_RESET_BASELINE);             // enable autocalibration
   } else {
     #ifdef DEBUG_OUTPUT_SENSORS
-      Serial.println("SEN: cannot find NAU7802 sensorboard");
+      DEBUG_OUT.println("SEN: cannot find NAU7802 sensorboard");
     #endif
 
     // check if an analog x/y sensor (e.g. a joystick module) is connected to the internal ADC
     if ((!isAnalogPinFloating(ANALOG_FORCE_SENSOR_X_PIN)) && (!isAnalogPinFloating(ANALOG_FORCE_SENSOR_Y_PIN))) {
       #ifdef DEBUG_OUTPUT_SENSORS
-        Serial.println("SEN: Force sensor connected to internal ADC");
+        DEBUG_OUT.println("SEN: Force sensor connected to internal ADC");
       #endif
       currentSensorDataCore1.forceSensorType = FORCE_INTERNAL_ADC;
       #ifndef FLIPMOUSE
@@ -211,7 +211,7 @@ void initSensors()
     }
     else {
      #ifdef DEBUG_OUTPUT_SENSORS
-      Serial.println("SEN: no force sensor connected");
+      DEBUG_OUT.println("SEN: no force sensor connected");
     #endif     
     } 
   }
@@ -770,6 +770,8 @@ int isAnalogPinFloating (int pin) {
   pinMode(pin, INPUT_PULLDOWN);
   analogRead (pin);
   y= adc_read();
+
+  Serial.printf("Testing Pin Float: %d, %d\n",x,y);
 
   if (x-y < PINFLOAT_DIFFERENCE_THRESHOLD) return(false);
   return(true);

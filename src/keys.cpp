@@ -63,9 +63,9 @@ int8_t setKeyboardLayout(char *name)
 		Keyboard.begin(newLayout);
     kbdLayoutArray = newLayout;
 		#ifdef DEBUG_OUTPUT_FULL
-			Serial.print("Found new layout pointer for ");
-			Serial.print(name);
-			Serial.println(", setting in Keyboard.begin");
+			DEBUG_OUT.print("Found new layout pointer for ");
+			DEBUG_OUT.print(name);
+			DEBUG_OUT.println(", setting in Keyboard.begin");
 		#endif
     strncpy(kbdLayout,name,5); //save locally
 		return 1;
@@ -94,11 +94,11 @@ void updateKey(int key, uint8_t keyAction)
   switch (keyAction)  {
     case KEY_PRESS:
     #ifdef DEBUG_OUTPUT_KEYS
-      Serial.print("P+");
+      DEBUG_OUT.print("P+");
     #endif
     case KEY_HOLD:
       #ifdef DEBUG_OUTPUT_KEYS
-        Serial.println("H");
+        DEBUG_OUT.println("H");
       #endif
       add_to_keybuffer(key);
       keyboardPress(key);       // press/hold keys individually
@@ -106,7 +106,7 @@ void updateKey(int key, uint8_t keyAction)
 
     case KEY_RELEASE:
       #ifdef DEBUG_OUTPUT_KEYS
-        Serial.println("R");
+        DEBUG_OUT.println("R");
       #endif
       remove_from_keybuffer(key);
       keyboardRelease(key);       // release keys individually
@@ -114,17 +114,17 @@ void updateKey(int key, uint8_t keyAction)
 
     case KEY_TOGGLE:
       #ifdef DEBUG_OUTPUT_KEYS
-        Serial.print("T-");
+        DEBUG_OUT.print("T-");
       #endif
       if (in_keybuffer(key))  {
         #ifdef DEBUG_OUTPUT_KEYS
-          Serial.println("R");
+          DEBUG_OUT.println("R");
         #endif
         remove_from_keybuffer(key);
         keyboardRelease(key);
       } else {
         #ifdef DEBUG_OUTPUT_KEYS
-          Serial.println("P");
+          DEBUG_OUT.println("P");
         #endif
         add_to_keybuffer (key);
         keyboardPress(key);
@@ -358,12 +358,12 @@ void performKeyActions(char* text,  uint8_t keyAction)
       
       for (unsigned int i = 0; i < KEYMAP1_ELEMENTS; i++) {
         #ifdef DEBUG_OUTPUT_KEYS
-          Serial.print("scanning for ");  Serial.println(keymap1[i].token);
+          DEBUG_OUT.print("scanning for ");  DEBUG_OUT.println(keymap1[i].token);
         #endif
         
         if (!strcmp(acttoken, keymap1[i].token)) {
           #ifdef DEBUG_OUTPUT_KEYS
-            Serial.print("found @"); Serial.print(i); Serial.print(", keycode: "); Serial.println(keymap1[i].key);
+            DEBUG_OUT.print("found @"); DEBUG_OUT.print(i); DEBUG_OUT.print(", keycode: "); DEBUG_OUT.println(keymap1[i].key);
           #endif
           
           updateKey(keymap1[i].key, keyAction);
@@ -376,7 +376,7 @@ void performKeyActions(char* text,  uint8_t keyAction)
       if(!found && (acttoken[0] >= '0' && acttoken[0] <= '9'))
       {
         #ifdef DEBUG_OUTPUT_KEYS
-          Serial.print("found num key: "); Serial.println(acttoken[0]);
+          DEBUG_OUT.print("found num key: "); DEBUG_OUT.println(acttoken[0]);
         #endif
         
         updateKey(acttoken[0], keyAction);
@@ -386,7 +386,7 @@ void performKeyActions(char* text,  uint8_t keyAction)
       if(!found && (acttoken[0] >= 'A' && acttoken[0] <= 'Z'))
       {
         #ifdef DEBUG_OUTPUT_KEYS
-          Serial.print("found ascii keys: "); Serial.println(toLowerCase(acttoken[0]));
+          DEBUG_OUT.print("found ascii keys: "); DEBUG_OUT.println(toLowerCase(acttoken[0]));
         #endif
         
         updateKey(toLowerCase(acttoken[0]), keyAction);

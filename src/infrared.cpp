@@ -116,10 +116,10 @@ void record_IR_command(char * name)
 
   //full edge feedback, if full debug is enabled
 #ifdef DEBUG_OUTPUT_IR
-  Serial.println("START IR ----------");
+  DEBUG_OUT.println("START IR ----------");
   for (uint8_t i = 0; i < edges; i++)
-    Serial.println(timings[i]);
-  Serial.println("END ----------");
+    DEBUG_OUT.println(timings[i]);
+  DEBUG_OUT.println("END ----------");
 #endif
 
   //return the recorded command name and the edge count
@@ -227,24 +227,24 @@ void start_IR_command_playback(char * name)
   if (edges == 0)
   {
 #ifdef DEBUG_OUTPUT_IR
-    Serial.print("No IR command found: ");
-    Serial.println(name);
+    DEBUG_OUT.print("No IR command found: ");
+    DEBUG_OUT.println(name);
 #endif
     return;
   }
 
   //full edge feedback, if full debug is enabled
 #ifdef DEBUG_OUTPUT_IR
-  Serial.println("START IR ----------");
+  DEBUG_OUT.println("START IR ----------");
   for (uint16_t i = 0; i < edges; i++)
   {
-    Serial.println(timings[i]);
+    DEBUG_OUT.println(timings[i]);
   }
-  Serial.println("END ----------");
-  Serial.print("act_edge: ");
-  Serial.print(act_edge);
-  Serial.print(", edges: ");
-  Serial.println(edges);
+  DEBUG_OUT.println("END ----------");
+  DEBUG_OUT.print("act_edge: ");
+  DEBUG_OUT.print(act_edge);
+  DEBUG_OUT.print(", edges: ");
+  DEBUG_OUT.println(edges);
 #endif
 
   makeTone(TONE_IR, 0);

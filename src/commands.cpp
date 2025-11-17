@@ -102,8 +102,8 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
   if (actButton != 0)  // if last command was BM (set buttonmode): store current command for this button !!
   {
 #ifdef DEBUG_OUTPUT_FULL
-    Serial.print("got new mode for button "); Serial.print(actButton); Serial.print(":");
-    Serial.print(cmd); Serial.print(","); Serial.print(par1); Serial.print(","); Serial.println(keystring);
+    DEBUG_OUT.print("got new mode for button "); DEBUG_OUT.print(actButton); DEBUG_OUT.print(":");
+    DEBUG_OUT.print(cmd); DEBUG_OUT.print(","); DEBUG_OUT.print(par1); DEBUG_OUT.print(","); DEBUG_OUT.println(keystring);
 #endif
     buttons[actButton - 1].mode = cmd;
     buttons[actButton - 1].value = par1;
@@ -120,7 +120,7 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
     case CMD_BM:
       release_all();
 #ifdef DEBUG_OUTPUT_FULL
-      Serial.print("set mode for button "); Serial.println(par1);
+      DEBUG_OUT.print("set mode for button "); DEBUG_OUT.println(par1);
 #endif
       if ((par1 > 0) && (par1 <= NUMBER_OF_BUTTONS))
         actButton = par1;
@@ -298,7 +298,7 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
       break;
     case CMD_NE:
 #ifdef DEBUG_OUTPUT_FULL
-      Serial.print("load next slot");
+      DEBUG_OUT.print("load next slot");
 #endif
       release_all();
       pauseDisplayUpdates(true);
@@ -310,7 +310,7 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
       break;
     case CMD_DE:
 #ifdef DEBUG_OUTPUT_FULL
-      Serial.println("delete slots");
+      DEBUG_OUT.println("delete slots");
 #endif
       release_all();
       if (deleteSlot(keystring))  Serial.println("OK");    // send AT command acknowledge      
@@ -338,15 +338,15 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
       
 #ifdef DEBUG_OUTPUT_FULL
       if (slotSettings.stickMode == STICKMODE_MOUSE)
-        Serial.println("mouse function activated");
+        DEBUG_OUT.println("mouse function activated");
       else if (slotSettings.stickMode >= STICKMODE_JOYSTICK_1)
-        Serial.println("joystick function activated");
-      else Serial.println("alternative functions activated");
+        DEBUG_OUT.println("joystick function activated");
+      else DEBUG_OUT.println("alternative functions activated");
 #endif
       break;
     case CMD_SW:
 #ifdef DEBUG_OUTPUT_FULL
-      Serial.println("switch mouse / alternative function");
+      DEBUG_OUT.println("switch mouse / alternative function");
 #endif
       initBlink(6, 15);
       if (slotSettings.stickMode == STICKMODE_ALTERNATIVE)  slotSettings.stickMode = STICKMODE_MOUSE;
@@ -360,7 +360,7 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
       break;
     case CMD_CA:
 #ifdef DEBUG_OUTPUT_FULL
-      Serial.println("start calibration");
+      DEBUG_OUT.println("start calibration");
 #endif
       initBlink(10, 20);
       startSensorCalibration();
@@ -390,7 +390,7 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
         char *cmd_copy_ptr, backslash;
         uint8_t len;
 #ifdef DEBUG_OUTPUT_FULL
-        Serial.print("execute macro:"); Serial.println(keystring);
+        DEBUG_OUT.print("execute macro:"); DEBUG_OUT.println(keystring);
 #endif
 
         // do the macro stuff: feed single commands to parser, seperator: ';'
@@ -441,8 +441,8 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
       break;
     case CMD_SC:
 #ifdef DEBUG_OUTPUT_FULL
-       Serial.print ("slot color: ");Serial.println (keystring);
-       Serial.println((uint32_t)strtol(keystring, NULL, 0));
+       DEBUG_OUT.print ("slot color: ");DEBUG_OUT.println (keystring);
+       DEBUG_OUT.println((uint32_t)strtol(keystring, NULL, 0));
 #endif
       slotSettings.sc = (uint32_t)strtol(keystring, NULL, 0);
       break;
@@ -458,7 +458,7 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
 
     case CMD_IR:
 #ifdef DEBUG_OUTPUT_FULL
-      Serial.println("record IR command");
+      DEBUG_OUT.println("record IR command");
 #endif
       if (keystring) {
         if ((strlen(keystring) > 0) && (strlen(keystring) < MAX_NAME_LEN-1))
@@ -467,14 +467,14 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
       break;
     case CMD_IP:
 #ifdef DEBUG_OUTPUT_FULL
-      Serial.println("play IR command");
+      DEBUG_OUT.println("play IR command");
 #endif
       if (keystring)
         play_IR_command(keystring);
       break;
     case CMD_IH:
 #ifdef DEBUG_OUTPUT_FULL
-      Serial.println("hold IR command");
+      DEBUG_OUT.println("hold IR command");
 #endif
       if (keystring) {
         if ((strlen(keystring) > 0) && (strlen(keystring) < MAX_NAME_LEN))
@@ -483,7 +483,7 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
       break;
     case CMD_IS:
 #ifdef DEBUG_OUTPUT_FULL
-      Serial.println("stop IR command");
+      DEBUG_OUT.println("stop IR command");
 #endif
       stop_IR_command();
       break;
@@ -507,35 +507,35 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
 
     case CMD_AT:
 #ifdef DEBUG_OUTPUT_FULL
-      Serial.println("transfer audio file");
+      DEBUG_OUT.println("transfer audio file");
 #endif
       audioTransfer(keystring);
       break;
 
     case CMD_AP:
 #ifdef DEBUG_OUTPUT_FULL
-      Serial.println("play audio file");
+      DEBUG_OUT.println("play audio file");
 #endif
       audioPlayback(keystring);
       break;
 
     case CMD_AR:
 #ifdef DEBUG_OUTPUT_FULL
-      Serial.println("remove audio file");
+      DEBUG_OUT.println("remove audio file");
 #endif
       audioRemove(keystring);
       break;
 
     case CMD_AL:
 #ifdef DEBUG_OUTPUT_FULL
-      Serial.println("list audio file");
+      DEBUG_OUT.println("list audio file");
 #endif
       audioList();
       break;
 
     case CMD_AV:
 #ifdef DEBUG_OUTPUT_FULL
-      Serial.println("audio volume");
+      DEBUG_OUT.println("audio volume");
 #endif
       if ((par1>=0) && (par1<=200))
         globalSettings.audioVolume=par1;
@@ -543,7 +543,7 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
 
     case CMD_AB:
 #ifdef DEBUG_OUTPUT_FULL
-      Serial.println("audio buzzer mode");
+      DEBUG_OUT.println("audio buzzer mode");
 #endif
       globalSettings.buzzerMode=par1;
       break;

@@ -33,8 +33,8 @@ void initButtonKeystrings()
     while (keystringBuffer[slotSettings.keystringBufferLen++]) ; 
   }
 #ifdef DEBUG_OUTPUT_FULL
-  Serial.print("Init ButtonKeystrings, bufferlen ="); 
-  Serial.println(slotSettings.keystringBufferLen);
+  DEBUG_OUT.print("Init ButtonKeystrings, bufferlen ="); 
+  DEBUG_OUT.println(slotSettings.keystringBufferLen);
 #endif
 }
 
@@ -94,7 +94,7 @@ uint16_t setButtonKeystring(uint8_t buttonIndex, char const * newKeystring)
   
 #ifdef DEBUG_OUTPUT_FULL
   printKeystrings();
-  Serial.print("bytes left:");Serial.println(MAX_KEYSTRINGBUFFER_LEN-slotSettings.keystringBufferLen);
+  DEBUG_OUT.print("bytes left:");DEBUG_OUT.println(MAX_KEYSTRINGBUFFER_LEN-slotSettings.keystringBufferLen);
 #endif
   return (MAX_KEYSTRINGBUFFER_LEN - slotSettings.keystringBufferLen);
 }

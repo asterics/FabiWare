@@ -73,11 +73,25 @@
 //#define DEBUG_OUTPUT_IR      	 // enable infrared.cpp debugging, showing whats happening on IR recv/send
 //#define DEBUG_OUTPUT_SENSORS 	 // enable sensors.cpp debugging, showing whats happening on sensor reading & init
 //#define DEBUG_DELAY_STARTUP 	 // enable a 3s delay after Serial.begin and before all the other stuff.
+//#define DEBUG_OUTPUT_I2C_SCAN  // enable output of detected I2C devices on scanning
 #define DEBUG_ACTIVITY_LED 	   // enable blinking internal led signaling activity (in sensor loop, core1).
 #define DEBUG_SLEEP_WITH_USB false  /* if true, we will send the Pico to sleep even with USB connected */
 //#define DEBUG_PRESSURE_RAWVALUES // raw output of pressure values and filtered output
 //#define DEBUG_MPRLS_ERRORFLAGS // continously print error flags of MPRLS
 //#define DEBUG_BATTERY_MANAGEMENT 	 // enable a debug output for battery state detection and management.
+
+/** Select the debug output stream */
+#define DEBUG_OUT Serial
+//#define DEBUG_OUT Serial2
+
+/** Select the debug output init function */
+//simply print together with AT cmd interface
+//#define DEBUG_OUT_INIT Serial.begin(115200)
+
+//print using button 1 / GPIO8 jack plug
+//#define DEBUG_OUT_INIT Serial2.setTX(8); Serial2.begin(115200)
+//lock GPIO from being used in gpio.cpp & modes.cpp
+//#define DEBUG_LOCK_GPIO 8
 
 
 /**
@@ -239,6 +253,14 @@ typedef char* uint_farptr_t_FM;
 #ifdef DEBUG_OUTPUT_SENSORS
   #warning "DEBUG_OUTPUT_SENSORS active! (GUI might not work)"
 #endif
+
+#ifdef DEBUG_LOCK_GPIO
+  #warning "GPIO pin locked for debugging, might disable one external button!"
+  #ifdef FLIPMOUSE
+    #error "Cannot lock GPIO for Serial port on a FLipMouse!"
+  #endif
+#endif
+
 #ifdef DEBUG_DELAY_STARTUP
   #warning "DELAY_STARTUP is active, do not release this way!"
 #endif

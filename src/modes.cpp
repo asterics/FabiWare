@@ -40,8 +40,14 @@ void handleUserInteraction()
   int strongDirThreshold;
 
   // check physical buttons
-  for (int i = 0; i < NUMBER_OF_PHYSICAL_BUTTONS; i++) // update button press / release events
-  handleButton(i, digitalRead(input_map[i]) == LOW ? 1 : 0);
+  for (int i = 0; i < NUMBER_OF_PHYSICAL_BUTTONS; i++) { // update button press / release events
+    //if one GPIO is locked for serial printing, don't use it.
+    #ifdef DEBUG_LOCK_GPIO    
+      if(input_map[i] != DEBUG_LOCK_GPIO) handleButton(i, digitalRead(input_map[i]) == LOW ? 1 : 0);
+    #else
+      handleButton(i, digitalRead(input_map[i]) == LOW ? 1 : 0);
+    #endif
+  }
 
   #ifndef FLIPMOUSE
   // SDA&SCL as GPIOs
