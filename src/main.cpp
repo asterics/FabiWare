@@ -108,7 +108,9 @@ struct SensorData sensorData {
   .clickReleaseTimestamp=0,
   .xLocalMax=0, .yLocalMax=0,
   .currentBattPercent = -1, .MCPSTAT = 0,
-  .usbConnected = false
+  .usbConnected = false,
+  .buttonStates = 0, .oldButtonStates = 0,
+  .I2CButtonStates = 0, .oldI2CButtonStates = 0
 };
 
 struct SlotSettings slotSettings;             // contains all slot settings
@@ -236,6 +238,7 @@ void loop() {
     sensorData.xRaw=currentSensorDataCore1.xRaw;
     sensorData.yRaw=currentSensorDataCore1.yRaw;
     sensorData.pressure=currentSensorDataCore1.pressure;
+    sensorData.I2CButtonStates=currentSensorDataCore1.I2CButtonStates;
     mutex_exit(&(currentSensorDataCore1.sensorDataMutex));
 
     // apply rotation if needed
@@ -363,7 +366,6 @@ void loop1() {
     static int cnt=0;   
     if (!(cnt++%200)) digitalWrite(LED_BUILTIN,!digitalRead(LED_BUILTIN));
   #endif
-
   // every 1s: check for changed I2C devices. TBD: for FABI only?
   NB_DELAY_START(i2cscan, 1000)
     //create a copy of list before checking again
@@ -382,7 +384,6 @@ void loop1() {
       }
     }
   NB_DELAY_END
-
   delay(1); // core1: sleep a bit ...  
 }
 

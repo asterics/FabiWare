@@ -50,9 +50,11 @@ uint8_t reportXValues = 0, reportYValues = 0;
 struct CurrentSensorDataCore1 currentSensorDataCore1 {        
   .xRaw=0, .yRaw=0, .pressure=512, 
   .calib_now=CALIBRATION_PERIOD,     // calibrate sensors after startup !
-  .calibX=512, .calibY=512
+  .calibX=512, .calibY=512,
+  .I2CButtonStates=0
 };
 
+i2c_fabi_data_t fabiI2CPacket = {0};
 
 /**
    @name configureNAU
@@ -152,7 +154,7 @@ void initSensors()
   if (currentSensorDataCore1.pressureSensorType != PRESSURE_NONE) {
     // set signal processing parameters for sip/puff pressure sensor
     PS.setGain(1.0);  // adjust gain for pressure sensor
-    PS.setSampleRate(PRESSURE_SAMPLINGRATE);    
+    PS.setSampleRate(PRESSURE_MAX_SAMPLINGRATE);    
     PS.setBaselineLowpass(0.4);
     PS.setNoiseLowpass(10.0);
 
@@ -195,25 +197,35 @@ void initSensors()
     #ifdef DEBUG_OUTPUT_SENSORS
       Serial.println("SEN: cannot find NAU7802 sensorboard");
     #endif
-
-    // check if an analog x/y sensor (e.g. a joystick module) is connected to the internal ADC
-    if ((!isAnalogPinFloating(ANALOG_FORCE_SENSOR_X_PIN)) && (!isAnalogPinFloating(ANALOG_FORCE_SENSOR_Y_PIN))) {
+    Wire1.beginTransmission(FABI_I2C_SLAVE_ADDR);
+    result = Wire1.endTransmission();
+    if (result == 0) {
       #ifdef DEBUG_OUTPUT_SENSORS
-        Serial.println("SEN: Force sensor connected to internal ADC");
+        Serial.println("SEN: Generic FABI Force sensor found!");
       #endif
-      currentSensorDataCore1.forceSensorType = FORCE_INTERNAL_ADC;
-      #ifndef FLIPMOUSE
-        // in case the FABI3 PCB is used, we cannot use internal ADC0 for force and pressure ...
-        if (currentSensorDataCore1.pressureSensorType == PRESSURE_INTERNAL_ADC) { 
-          currentSensorDataCore1.pressureSensorType = PRESSURE_NONE;
-        }
-      #endif
+      currentSensorDataCore1.forceSensorType = FORCE_FABI_GENERIC;
+      currentSensorDataCore1.pressureSensorType = PRESSURE_FABI_GENERIC;
+    } else {  
+
+      // check if an analog x/y sensor (e.g. a joystick module) is connected to the internal ADC
+      if ((!isAnalogPinFloating(ANALOG_FORCE_SENSOR_X_PIN)) && (!isAnalogPinFloating(ANALOG_FORCE_SENSOR_Y_PIN))) {
+        #ifdef DEBUG_OUTPUT_SENSORS
+          Serial.println("SEN: Force sensor connected to internal ADC");
+        #endif
+        currentSensorDataCore1.forceSensorType = FORCE_INTERNAL_ADC;
+        #ifndef FLIPMOUSE
+          // in case the FABI3 PCB is used, we cannot use internal ADC0 for force and pressure ...
+          if (currentSensorDataCore1.pressureSensorType == PRESSURE_INTERNAL_ADC) { 
+            currentSensorDataCore1.pressureSensorType = PRESSURE_NONE;
+          }
+        #endif
+      }
+      else {
+      #ifdef DEBUG_OUTPUT_SENSORS
+        Serial.println("SEN: no force sensor connected");
+      #endif     
+      } 
     }
-    else {
-     #ifdef DEBUG_OUTPUT_SENSORS
-      Serial.println("SEN: no force sensor connected");
-    #endif     
-    } 
   }
 }
 
@@ -383,8 +395,9 @@ void getNAUValues(int32_t * actX, int32_t * actY) {
 void readPressure()
 {
   int actPressure = 512;
+  int newData = 0;
 
-  NB_DELAY_START(pressure_ts,1000/PRESSURE_SAMPLINGRATE)
+  NB_DELAY_START(pressure_ts, 1000 / PRESSURE_MAX_SAMPLINGRATE)
     switch (currentSensorDataCore1.pressureSensorType)
     {
       case PRESSURE_MPRLS:
@@ -416,6 +429,7 @@ void readPressure()
           if (mprls_filtered < 0) mprls_filtered = -sqrt(-mprls_filtered);
 
           actPressure = 512 + mprls_filtered / MPRLS_DIVIDER;
+          newData = 1;
         }
         break;
 
@@ -436,11 +450,16 @@ void readPressure()
           if (dps_filtered < 0) dps_filtered = -sqrt(-dps_filtered);
 
           actPressure = 512 + dps_filtered / DPS_DIVIDER;
+          newData = 1;
         }
         break;
       
       case PRESSURE_INTERNAL_ADC:
         actPressure = analogRead(ANALOG_PRESSURE_SENSOR_PIN);
+        newData = 1;
+        break;
+
+      case PRESSURE_FABI_GENERIC:
         break;
 
       default:
@@ -455,11 +474,12 @@ void readPressure()
 
     // during calibration period: set pressure to center (bypass)
     if (currentSensorDataCore1.calib_now) actPressure = 512;
-
-    // here we provide new pressure values for further processing by core 0 !
-    mutex_enter_blocking(&(currentSensorDataCore1.sensorDataMutex));
-    currentSensorDataCore1.pressure = actPressure;
-    mutex_exit(&(currentSensorDataCore1.sensorDataMutex));
+    if (newData) {
+      // here we provide new pressure values for further processing by core 0 !
+      mutex_enter_blocking(&(currentSensorDataCore1.sensorDataMutex));
+      currentSensorDataCore1.pressure = actPressure;
+      mutex_exit(&(currentSensorDataCore1.sensorDataMutex));
+    }
   NB_DELAY_END
 }
 
@@ -474,57 +494,92 @@ void readForce()
   uint8_t newData=0;
   int32_t currentX = 0, currentY = 0;
 
-  switch (currentSensorDataCore1.forceSensorType)
-  {
-    case FORCE_INTERNAL_ADC:
-      newData=1;
-      currentX = analogRead (ANALOG_FORCE_SENSOR_X_PIN)-currentSensorDataCore1.calibX;
-      currentY = analogRead (ANALOG_FORCE_SENSOR_Y_PIN)-currentSensorDataCore1.calibY;
-      break;
-
-    case FORCE_NAU7802:
-      // if the Data Ready Pin of NAU chip signals new data: get force sensor values
-      if (digitalRead(DRDY_PIN) == HIGH)  { 
+  NB_DELAY_START(force_ts, 1000 / FORCE_MAX_SAMPLINGRATE)
+    switch (currentSensorDataCore1.forceSensorType)
+    {
+      case FORCE_INTERNAL_ADC:
         newData=1;
-        // get new values from NAU chip
-        getNAUValues (&nau_x, &nau_y);
+        currentX = analogRead (ANALOG_FORCE_SENSOR_X_PIN)-currentSensorDataCore1.calibX;
+        currentY = analogRead (ANALOG_FORCE_SENSOR_Y_PIN)-currentSensorDataCore1.calibY;
+        break;
 
-        // prevent unintended baseline correction if other axis is moving
-        YS.lockBaseline(XS.isMoving());
-        XS.lockBaseline(YS.isMoving());
+      case FORCE_NAU7802:
+        // if the Data Ready Pin of NAU chip signals new data: get force sensor values
+        if (digitalRead(DRDY_PIN) == HIGH)  { 
+          newData=1;
+          // get new values from NAU chip
+          getNAUValues (&nau_x, &nau_y);
 
-        // report values if enabled (only every second iteration as we interpolate 2 values)
-        if (printCount++ > 1) {
-          printCount = 0;
-          if (reportXValues) XS.printValues(0x07, 40000);
-          if (reportYValues) YS.printValues(0x07, 40000);
-          if (reportXValues || reportYValues) Serial.println("");
-        }
+          // prevent unintended baseline correction if other axis is moving
+          YS.lockBaseline(XS.isMoving());
+          XS.lockBaseline(YS.isMoving());
 
-        if (currentSensorDataCore1.calib_now) {
-          // during calibration period: set X/Y value to zero
-          currentX = 0;
-          currentY = 0;
+          // report values if enabled (only every second iteration as we interpolate 2 values)
+          if (printCount++ > 1) {
+            printCount = 0;
+            if (reportXValues) XS.printValues(0x07, 40000);
+            if (reportYValues) YS.printValues(0x07, 40000);
+            if (reportXValues || reportYValues) Serial.println("");
+          }
+
+          if (currentSensorDataCore1.calib_now) {
+            // during calibration period: set X/Y value to zero
+            currentX = 0;
+            currentY = 0;
+          }
+          else {
+            currentX = nau_x / NAU_DIVIDER;
+            currentY = nau_y / NAU_DIVIDER;
+          }
         }
-        else {
-          currentX = nau_x / NAU_DIVIDER;
-          currentY = nau_y / NAU_DIVIDER;
+        break;
+
+      case FORCE_FABI_GENERIC:
+      {
+        #ifdef DEBUG_OUTPUT_SENSORS
+          Serial.print("\nGet generic FABI I2C data:");
+        #endif     
+        Wire1.requestFrom(FABI_I2C_SLAVE_ADDR, 8);
+        fabiI2CPacket.reportType = Wire1.read();
+        fabiI2CPacket.x = Wire1.read();
+        fabiI2CPacket.x |= (Wire1.read() << 8);
+        if (fabiI2CPacket.reportType & FABI_I2C_REPORT_X) { 
+          currentX = fabiI2CPacket.x; newData=1; 
         }
+        fabiI2CPacket.y = Wire1.read();
+        fabiI2CPacket.y |= (Wire1.read() << 8);
+        if (fabiI2CPacket.reportType & FABI_I2C_REPORT_Y) { 
+          currentY = fabiI2CPacket.y; newData=1; 
+        }
+        fabiI2CPacket.pressure = Wire1.read();
+        fabiI2CPacket.pressure |= (Wire1.read() << 8);
+        fabiI2CPacket.button_states = Wire1.read();
+        mutex_enter_blocking(&(currentSensorDataCore1.sensorDataMutex));
+        if (fabiI2CPacket.reportType & FABI_I2C_REPORT_PRESSURE) 
+          currentSensorDataCore1.pressure = fabiI2CPacket.pressure;  // override pressure value
+        if (fabiI2CPacket.reportType & FABI_I2C_REPORT_BUTTONS) 
+          currentSensorDataCore1.I2CButtonStates = fabiI2CPacket.button_states; // override button states
+        mutex_exit(&(currentSensorDataCore1.sensorDataMutex));
+        newData=1;
+        #ifdef DEBUG_OUTPUT_SENSORS
+            Serial.printf("ReportType = %02X. x = %d, y = %d, pressure = %d,button states = %02X\n", 
+              fabiI2CPacket.reportType, fabiI2CPacket.x, fabiI2CPacket.y, fabiI2CPacket.pressure, fabiI2CPacket.button_states);
+        #endif     
+        break;
       }
-      break;
+      case FORCE_NONE: break;
+      default:
+          break;
+    }
 
-    case FORCE_NONE:
-    default:
-      break;
-  }
-
-  if (newData) {
-    // here we provide new X/Y values for further processing by core 0 !
-    mutex_enter_blocking(&(currentSensorDataCore1.sensorDataMutex));
-    currentSensorDataCore1.xRaw =  currentX;
-    currentSensorDataCore1.yRaw =  currentY;
-    mutex_exit(&(currentSensorDataCore1.sensorDataMutex));
-  }
+    if (newData) {
+      // here we provide new X/Y values for further processing by core 0 !
+      mutex_enter_blocking(&(currentSensorDataCore1.sensorDataMutex));
+      currentSensorDataCore1.xRaw =  currentX;
+      currentSensorDataCore1.yRaw =  currentY;
+      mutex_exit(&(currentSensorDataCore1.sensorDataMutex));
+    }
+  NB_DELAY_END
 }
 
 

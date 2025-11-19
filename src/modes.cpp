@@ -18,6 +18,7 @@
 #include "modes.h"
 #include "gpio.h"
 #include "tone.h"
+#include "sensors.h"
 
 /**
    static variables for mode handling
@@ -53,9 +54,25 @@ void handleUserInteraction()
   static uint8_t puffCount = 0, sipCount = 0;
   int strongDirThreshold;
 
-  // check physical buttons
-  for (int i = 0; i < NUMBER_OF_PHYSICAL_BUTTONS; i++) // update button press / release events
-  handleButton(i, digitalRead(input_map[i]) == LOW ? 1 : 0);
+  // handle button press and release actions
+  for (int i = 0; i < NUMBER_OF_PHYSICAL_BUTTONS; i++) { // update button press / release events
+    // update and check physical buttons
+    digitalRead(input_map[i]) == LOW ? sensorData.buttonStates |= (1<<i) : sensorData.buttonStates &= ~(1<<i);
+    if  ((sensorData.buttonStates & (1<<i)) != (sensorData.oldButtonStates & (1<<i))) {
+      if (sensorData.buttonStates & (1<<i)) handlePress(i); 
+      else  handleRelease(i);
+    }
+    sensorData.oldButtonStates = sensorData.buttonStates;
+
+    for (int i = 0; i < NUMBER_OF_PHYSICAL_BUTTONS; i++) { // update button press / release events
+      // check I2C buttons (override physical buttons)
+      if ((sensorData.I2CButtonStates & (1<<i)) != (sensorData.oldI2CButtonStates & (1<<i))) {
+        if (sensorData.I2CButtonStates & (1<<i)) handlePress(i); 
+        else handleRelease(i); // button i was released
+      }
+    }
+    sensorData.oldI2CButtonStates = sensorData.I2CButtonStates;
+  }
 
   #ifdef FLIPMOUSE
     // check "long-press" of internal button unpairing all BT hosts
@@ -319,9 +336,18 @@ float getAccelFactor() {
 void acceleratedMouseMove(float accelFactor) {
   static float accumXpos = 0;
   static float accumYpos = 0;
+  float moveValX, moveValY;
 
-  float moveValX = sensorData.x * (float)slotSettings.ax * accelFactor;
-  float moveValY = sensorData.y * (float)slotSettings.ay * accelFactor;
+  if (getForceSensorType() != FORCE_FABI_GENERIC)
+  {
+    moveValX = sensorData.x * (float)slotSettings.ax * accelFactor;
+    moveValY = sensorData.y * (float)slotSettings.ay * accelFactor;
+  }
+  else {
+    moveValX = sensorData.xRaw * (float)slotSettings.ax / 50;
+    moveValY = sensorData.yRaw * (float)slotSettings.ay / 50;
+  }
+
   float actSpeed =  sqrtf (moveValX * moveValX + moveValY * moveValY);
   float max_speed = (float)slotSettings.ms / 3.0f;
 

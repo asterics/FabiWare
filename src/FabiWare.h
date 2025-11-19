@@ -64,14 +64,14 @@
 #include "bluetooth.h"
 #include "hid_hal.h"
 
-
+ 
 // Optional Debug Output Control
 
 //#define DEBUG_OUTPUT_FULL      // if full debug output is desired
 //#define DEBUG_OUTPUT_MEMORY    // enables eeprom.cpp debugging, showing memory access
 //#define DEBUG_OUTPUT_KEYS      // enable keys.cpp debugging, showing key press/release events and keycode lookup
 //#define DEBUG_OUTPUT_IR      	 // enable infrared.cpp debugging, showing whats happening on IR recv/send
-//#define DEBUG_OUTPUT_SENSORS 	 // enable sensors.cpp debugging, showing whats happening on sensor reading & init
+// #define DEBUG_OUTPUT_SENSORS 	 // enable sensors.cpp debugging, showing whats happening on sensor reading & init
 //#define DEBUG_DELAY_STARTUP 	 // enable a 3s delay after Serial.begin and before all the other stuff.
 #define DEBUG_ACTIVITY_LED 	   // enable blinking internal led signaling activity (in sensor loop, core1).
 //#define DEBUG_PRESSURE_RAWVALUES // raw output of pressure values and filtered output
@@ -108,7 +108,7 @@
 
 //supported I2C addresses, these are scanned for changes during runtime (plugging / unplugging devices)
 //@note End this list with 0x00!
-const uint8_t supported_devices[] = {0x3C /*OLED*/, 0x77 /*DPS310*/, 0x18 /*MPRLS*/, 0x2A /* NAU78ß02 */, 0x00 /* END */};
+const uint8_t supported_devices[] = {0x3C /*OLED*/, 0x77 /*DPS310*/, 0x18 /*MPRLS*/, 0x2A /* NAU78ß02 */, 0xFA /* FABI-Generic */, 0x00 /* END */};
 
 /**
    GlobalSettings struct
@@ -178,6 +178,8 @@ struct SensorData {
   int xLocalMax, yLocalMax;  
   int8_t currentBattPercent, MCPSTAT;
   bool usbConnected;
+  uint8_t buttonStates, oldButtonStates;
+  uint8_t I2CButtonStates, oldI2CButtonStates;
 };
 
 /**
