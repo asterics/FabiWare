@@ -71,7 +71,7 @@
 //#define DEBUG_OUTPUT_MEMORY    // enables eeprom.cpp debugging, showing memory access
 //#define DEBUG_OUTPUT_KEYS      // enable keys.cpp debugging, showing key press/release events and keycode lookup
 //#define DEBUG_OUTPUT_IR      	 // enable infrared.cpp debugging, showing whats happening on IR recv/send
-// #define DEBUG_OUTPUT_SENSORS 	 // enable sensors.cpp debugging, showing whats happening on sensor reading & init
+//#define DEBUG_OUTPUT_SENSORS 	 // enable sensors.cpp debugging, showing whats happening on sensor reading & init
 //#define DEBUG_DELAY_STARTUP 	 // enable a 3s delay after Serial.begin and before all the other stuff.
 #define DEBUG_ACTIVITY_LED 	   // enable blinking internal led signaling activity (in sensor loop, core1).
 //#define DEBUG_PRESSURE_RAWVALUES // raw output of pressure values and filtered output
@@ -106,9 +106,17 @@
 #define DIR_S   7   // south
 #define DIR_SE  8   // south-east
 
+
+/**** I2C devices and sensor addresses */
+#define MPRLS_ADDR 0x18           // I2C address of the MPRLS pressure sensor 
+#define DPS310_ADDR 0x77          // I2C address of the DPS310 pressure sensor 
+#define FABI_I2C_ADDON_ADDR 0x37  // I2C address of an I2C-connected FABI sensor interfaces (first byte: uint8_t reportType, then data bytes) 
+#define NAU_ADDR 0x2A             // I2C address of the NAU7802 loadcell amplifier
+
+
 //supported I2C addresses, these are scanned for changes during runtime (plugging / unplugging devices)
 //@note End this list with 0x00!
-const uint8_t supported_devices[] = {0x3C /*OLED*/, 0x77 /*DPS310*/, 0x18 /*MPRLS*/, 0x2A /* NAU78ß02 */, 0xFA /* FABI-Generic */, 0x00 /* END */};
+const uint8_t supported_devices[] = {0x3C /*OLED*/, DPS310_ADDR /*DPS310 pressure sensor */, MPRLS_ADDR /*MPRLS pressure sensor */, NAU_ADDR /* NAU7802 strain gauge senosorboard*/, FABI_I2C_ADDON_ADDR /* generic FABI I2C AddOn */, 0x00 /* END */};
 
 /**
    GlobalSettings struct

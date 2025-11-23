@@ -23,12 +23,6 @@
 #include <LoadcellSensor.h>  // for signal conditioning
 #include <Adafruit_NAU7802.h>  //NAU7802 library (Benjamin Aigner's fork with channel change feature)
 
-/**** sensor GPIOs & addresses */
-
-#define MPRLS_ADDR 0x18           // I2C address of the MPRLS pressure sensor 
-#define DPS310_ADDR 0x77          // I2C address of the DPS310 pressure sensor 
-#define FABI_I2C_SLAVE_ADDR 0xfa  // I2C address of an I2C-connected FABI sensor interface (first byte: uint8_t reportType, then data bytes) 
-
 /**** MPRLS related signal shaping parameters */
 #define MPRLS_DIVIDER 2                 // divider for the MPRLS raw value.
 #define MEDIAN_VALUES 5                 // number of values used for median-based spike filter (for MPRLS sensor)
@@ -41,7 +35,7 @@
 #define DPS_MEDIAN_VALUES 5                // number of values used for median-based spike filter (for MPRLS sensor)
 
 /**** NAU7802 related signal shaping parameters */
-#define NAU_DIVIDER 120                 // divider for the NAU raw values
+#define NAU_DIVIDER 120               // divider for the NAU raw values
 
 /**** general sensor related settings */
 #define SENSOR_WATCHDOG_TIMEOUT    3000   // watchdog reset time (no NAU sensor data for x millsec. resets device)
@@ -88,17 +82,19 @@ extern struct CurrentSensorDataCore1 currentSensorDataCore1;
 
 // data structure for FABI I2C transmission
 
-#define FABI_I2C_REPORT_X         (1<<0)  // bitmask for 1st data field in FABI generic sensor I2C report: int16_t x        (2 bytes)
-#define FABI_I2C_REPORT_Y         (1<<1)  // bitmask for 2nd data field in FABI generic sensor I2C report: int16_t y        (2 bytes)
-#define FABI_I2C_REPORT_PRESSURE  (1<<2)  // bitmask for 3rd data field in FABI generic sensor I2C report: int16_t pressure (2 bytes)
-#define FABI_I2C_REPORT_BUTTONS   (1<<3)  // bitmask for 4th data field in FABI generic sensor I2C report: uint8_t buttons  (1 byte)
+#define FABI_I2C_CMD_GET_CAPS     0xFF    // command to request device capabilities bitmask
+
+#define FABI_I2C_CAP_XY        (1<<0)  // bitmask for 1st data field in FABI generic sensor I2C report: int16_t x / int16_t y  (4 bytes)
+#define FABI_I2C_CAP_PRESSURE  (1<<1)  // bitmask for 3rd data field in FABI generic sensor I2C report: int16_t pressure       (2 bytes)
+#define FABI_I2C_CAP_BUTTONS   (1<<2)  // bitmask for 4th data field in FABI generic sensor I2C report: uint16_t buttons       (2 bytes)
+  
 
 typedef struct {
   uint8_t reportType;      // first byte contains flags (bitmask) for transferred data fields
   int16_t x;
   int16_t y;
   uint16_t pressure;
-  uint8_t button_states;
+  uint16_t button_states;
 } i2c_fabi_data_t;
 
 

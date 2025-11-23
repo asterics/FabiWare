@@ -30,7 +30,6 @@ int sensorWatchdog = -1;
 #define MPRLS_STATUS_MATHSAT (0x01) ///< Status bit for math saturation
 #define MPRLS_STATUS_MASK (0b01100101) ///< Sensor status mask: only these bits are set
 
-
 #define DPS_R_PSR_B2 0x00
 #define DPS_R_PSR_B1 0x01
 #define DPS_R_PSR_B0 0x02
@@ -55,6 +54,8 @@ struct CurrentSensorDataCore1 currentSensorDataCore1 {
 };
 
 i2c_fabi_data_t fabiI2CPacket = {0};
+uint8_t FABIAddOnCapabilities = 0;
+
 
 /**
    @name configureNAU
@@ -197,15 +198,30 @@ void initSensors()
     #ifdef DEBUG_OUTPUT_SENSORS
       Serial.println("SEN: cannot find NAU7802 sensorboard");
     #endif
-    Wire1.beginTransmission(FABI_I2C_SLAVE_ADDR);
+
+    Wire1.beginTransmission(FABI_I2C_ADDON_ADDR);  // check for generic FABI I2C sensor
+    Wire1.write(FABI_I2C_CMD_GET_CAPS); // and request capabilities
     result = Wire1.endTransmission();
     if (result == 0) {
-      #ifdef DEBUG_OUTPUT_SENSORS
-        Serial.println("SEN: Generic FABI Force sensor found!");
-      #endif
-      currentSensorDataCore1.forceSensorType = FORCE_FABI_GENERIC;
-      currentSensorDataCore1.pressureSensorType = PRESSURE_FABI_GENERIC;
+      if (Wire1.requestFrom(FABI_I2C_ADDON_ADDR, 1) == 1) {
+        // get capabilites byte
+        FABIAddOnCapabilities = Wire1.read();
+        // update sensor types accordingly
+        if (FABIAddOnCapabilities & FABI_I2C_CAP_XY) currentSensorDataCore1.forceSensorType = FORCE_FABI_GENERIC;
+        if (FABIAddOnCapabilities & FABI_I2C_CAP_PRESSURE) currentSensorDataCore1.pressureSensorType = PRESSURE_FABI_GENERIC;
+        #ifdef DEBUG_OUTPUT_SENSORS
+          Serial.printf("SEN: Generic FABI I2C sensor found! Capabilities Mask: 0x%02X\n", FABIAddOnCapabilities);
+          if (FABIAddOnCapabilities & FABI_I2C_CAP_XY) Serial.println(" - Supports X and Y Axis");
+          if (FABIAddOnCapabilities & FABI_I2C_CAP_PRESSURE) Serial.println(" - Supports Pressure");
+          if (FABIAddOnCapabilities & FABI_I2C_CAP_BUTTONS) Serial.println(" - Supports Buttons");
+        #endif
+      } else {
+        Serial.println("Slave did not respond to capability request.");
+      }
     } else {  
+      #ifdef DEBUG_OUTPUT_SENSORS
+          Serial.println("SEN: cannot find generic FABI I2C sensor.");
+      #endif
 
       // check if an analog x/y sensor (e.g. a joystick module) is connected to the internal ADC
       if ((!isAnalogPinFloating(ANALOG_FORCE_SENSOR_X_PIN)) && (!isAnalogPinFloating(ANALOG_FORCE_SENSOR_Y_PIN))) {
@@ -401,11 +417,11 @@ void readPressure()
     switch (currentSensorDataCore1.pressureSensorType)
     {
       case PRESSURE_MPRLS:
-      {
+        {
           // get new value from MPRLS chip
           int mprlsStatus = getMPRLSValue(&pressure_rawval);
 
-  #ifdef DEBUG_MPRLS_ERRORFLAGS
+          #ifdef DEBUG_MPRLS_ERRORFLAGS
           // any errors?  - just indicate them via serial message
           if (mprlsStatus & MPRLS_STATUS_BUSY) {
             Serial.println("MPRLS: busy");
@@ -416,7 +432,7 @@ void readPressure()
           if (mprlsStatus & MPRLS_STATUS_MATHSAT) {
             Serial.println("MPRLS:saturated");
           }
-  #endif
+          #endif
 
           int med = calculateMedian(pressure_rawval);
           if (abs(med - pressure_rawval) >  SPIKE_DETECTION_THRESHOLD) {
@@ -460,12 +476,41 @@ void readPressure()
         break;
 
       case PRESSURE_FABI_GENERIC:
-        break;
+      {
+        Wire1.beginTransmission(FABI_I2C_ADDON_ADDR);
+        Wire1.write(FABI_I2C_CAP_PRESSURE);
+        Wire1.endTransmission();
+        const uint8_t expectedBytes = 3;
+        int received = Wire1.requestFrom(FABI_I2C_ADDON_ADDR, expectedBytes);
+        if (received == expectedBytes) {
+          fabiI2CPacket.reportType = Wire1.read();
+
+          if (fabiI2CPacket.reportType == FABI_I2C_CAP_PRESSURE) {
+            fabiI2CPacket.pressure = Wire1.read();
+            fabiI2CPacket.pressure |= (Wire1.read() << 8); // Combine LSB and MSB
+            #ifdef DEBUG_OUTPUT_SENSORS
+              Serial.printf("get I2C data: pressure = %d\n", fabiI2CPacket.pressure );
+            #endif     
+
+            actPressure = fabiI2CPacket.pressure;
+            newData = 1;
+          } else {
+            #ifdef DEBUG_OUTPUT_SENSORS
+              Serial.printf("Protocol Mismatch! Header: 0x%02X\n", fabiI2CPacket.reportType);
+            #endif
+            while(Wire1.available()) Wire1.read();   // Flush buffer
+          }
+        } else {
+          #ifdef DEBUG_OUTPUT_SENSORS
+            Serial.println("Failed to read pressure data (NACK or size mismatch)");
+          #endif
+        }
+      }
+      break;
 
       default:
-      case PRESSURE_NONE:
-        actPressure = 512;
-        break;
+          actPressure = 512;
+      break;
     }
     
     // clamp to 1/1022 (allows disabling strong sip/puff)
@@ -536,35 +581,70 @@ void readForce()
 
       case FORCE_FABI_GENERIC:
       {
-        #ifdef DEBUG_OUTPUT_SENSORS
-          Serial.print("\nGet generic FABI I2C data:");
-        #endif     
-        Wire1.requestFrom(FABI_I2C_SLAVE_ADDR, 8);
-        fabiI2CPacket.reportType = Wire1.read();
-        fabiI2CPacket.x = Wire1.read();
-        fabiI2CPacket.x |= (Wire1.read() << 8);
-        if (fabiI2CPacket.reportType & FABI_I2C_REPORT_X) { 
-          currentX = fabiI2CPacket.x; newData=1; 
+        Wire1.beginTransmission(FABI_I2C_ADDON_ADDR);
+        Wire1.write(FABI_I2C_CAP_XY);
+        Wire1.endTransmission();
+        uint8_t expectedBytes = 5;
+        int received = Wire1.requestFrom(FABI_I2C_ADDON_ADDR, expectedBytes);
+        if (received == expectedBytes) {
+          fabiI2CPacket.reportType = Wire1.read();
+
+          if (fabiI2CPacket.reportType == FABI_I2C_CAP_XY) {
+            fabiI2CPacket.x = Wire1.read();
+            fabiI2CPacket.x |= (Wire1.read() << 8); // Combine LSB and MSB
+            fabiI2CPacket.y = Wire1.read();
+            fabiI2CPacket.y |= (Wire1.read() << 8); // Combine LSB and MSB
+            currentX = fabiI2CPacket.x;
+            currentY = fabiI2CPacket.y;
+            newData = 1;
+
+            #ifdef DEBUG_OUTPUT_SENSORS
+              Serial.printf("get I2C data: x = %d, y = %d\n", fabiI2CPacket.x, fabiI2CPacket.y );
+            #endif     
+
+          } else {
+            #ifdef DEBUG_OUTPUT_SENSORS
+              Serial.printf("Protocol Mismatch! Header: 0x%02X\n", fabiI2CPacket.reportType);
+            #endif
+            while(Wire1.available()) Wire1.read();   // Flush buffer
+          }
+        } else {
+          #ifdef DEBUG_OUTPUT_SENSORS
+            Serial.println("Failed to read XY data (NACK or size mismatch)");
+          #endif
         }
-        fabiI2CPacket.y = Wire1.read();
-        fabiI2CPacket.y |= (Wire1.read() << 8);
-        if (fabiI2CPacket.reportType & FABI_I2C_REPORT_Y) { 
-          currentY = fabiI2CPacket.y; newData=1; 
-        }
-        fabiI2CPacket.pressure = Wire1.read();
-        fabiI2CPacket.pressure |= (Wire1.read() << 8);
-        fabiI2CPacket.button_states = Wire1.read();
-        mutex_enter_blocking(&(currentSensorDataCore1.sensorDataMutex));
-        if (fabiI2CPacket.reportType & FABI_I2C_REPORT_PRESSURE) 
-          currentSensorDataCore1.pressure = fabiI2CPacket.pressure;  // override pressure value
-        if (fabiI2CPacket.reportType & FABI_I2C_REPORT_BUTTONS) 
-          currentSensorDataCore1.I2CButtonStates = fabiI2CPacket.button_states; // override button states
-        mutex_exit(&(currentSensorDataCore1.sensorDataMutex));
-        newData=1;
-        #ifdef DEBUG_OUTPUT_SENSORS
-            Serial.printf("ReportType = %02X. x = %d, y = %d, pressure = %d,button states = %02X\n", 
-              fabiI2CPacket.reportType, fabiI2CPacket.x, fabiI2CPacket.y, fabiI2CPacket.pressure, fabiI2CPacket.button_states);
-        #endif     
+
+
+        // also read button states if supported
+        Wire1.beginTransmission(FABI_I2C_ADDON_ADDR);
+        Wire1.write(FABI_I2C_CAP_BUTTONS);
+        Wire1.endTransmission();
+        expectedBytes = 3;
+        received = Wire1.requestFrom(FABI_I2C_ADDON_ADDR, expectedBytes);
+        if (received == expectedBytes) {
+          fabiI2CPacket.reportType = Wire1.read();
+
+          if (fabiI2CPacket.reportType == FABI_I2C_CAP_BUTTONS) {
+            fabiI2CPacket.button_states = Wire1.read();
+            fabiI2CPacket.button_states |= (Wire1.read() << 8); // Combine LSB and MSB
+
+            #ifdef DEBUG_OUTPUT_SENSORS
+              Serial.printf("get I2C data: buttons = %04X\n", fabiI2CPacket.button_states );
+            #endif     
+            mutex_enter_blocking(&(currentSensorDataCore1.sensorDataMutex));
+            currentSensorDataCore1.I2CButtonStates = fabiI2CPacket.button_states; // override button states
+            mutex_exit(&(currentSensorDataCore1.sensorDataMutex));
+          } else {
+            #ifdef DEBUG_OUTPUT_SENSORS
+              Serial.printf("Protocol Mismatch! Header: 0x%02X\n", fabiI2CPacket.reportType);
+            #endif
+            while(Wire1.available()) Wire1.read();   // Flush buffer
+          }
+        } else {
+          #ifdef DEBUG_OUTPUT_SENSORS
+            Serial.println("Failed to read Button States (NACK or size mismatch)");
+          #endif
+        }        
         break;
       }
       case FORCE_NONE: break;
