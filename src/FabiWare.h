@@ -64,7 +64,7 @@
 #include "bluetooth.h"
 #include "hid_hal.h"
 
-
+ 
 // Optional Debug Output Control
 
 //#define DEBUG_OUTPUT_FULL      // if full debug output is desired
@@ -121,9 +121,17 @@
 #define DIR_S   7   // south
 #define DIR_SE  8   // south-east
 
+
+/**** I2C devices and sensor addresses */
+#define MPRLS_ADDR 0x18           // I2C address of the MPRLS pressure sensor 
+#define DPS310_ADDR 0x77          // I2C address of the DPS310 pressure sensor 
+#define FABI_I2C_ADDON_ADDR 0x37  // I2C address of an I2C-connected FABI sensor interfaces (first byte: uint8_t reportType, then data bytes) 
+#define NAU_ADDR 0x2A             // I2C address of the NAU7802 loadcell amplifier
+
+
 //supported I2C addresses, these are scanned for changes during runtime (plugging / unplugging devices)
 //@note End this list with 0x00!
-const uint8_t supported_devices[] = {0x3C /*OLED*/, 0x77 /*DPS310*/, 0x18 /*MPRLS*/, 0x2A /* NAU78ß02 */, 0x00 /* END */};
+const uint8_t supported_devices[] = {0x3C /*OLED*/, DPS310_ADDR /*DPS310 pressure sensor */, MPRLS_ADDR /*MPRLS pressure sensor */, NAU_ADDR /* NAU7802 strain gauge senosorboard*/, FABI_I2C_ADDON_ADDR /* generic FABI I2C AddOn */, 0x00 /* END */};
 
 /**
    GlobalSettings struct
@@ -193,6 +201,8 @@ struct SensorData {
   int xLocalMax, yLocalMax;  
   int8_t currentBattPercent, MCPSTAT;
   bool usbConnected;
+  uint8_t buttonStates, oldButtonStates;
+  uint8_t I2CButtonStates, oldI2CButtonStates;
 };
 
 /**

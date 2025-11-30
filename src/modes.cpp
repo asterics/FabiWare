@@ -18,6 +18,7 @@
 #include "modes.h"
 #include "gpio.h"
 #include "tone.h"
+#include "sensors.h"
 
 /**
    static variables for mode handling
@@ -29,6 +30,20 @@ uint8_t strongSipPuffState = STRONG_MODE_IDLE;
 */
 void handleMovement(); 
 
+bool noStrongPuffSpecialActions() {
+  return ( (buttons[STRONGPUFF_UP_BUTTON].mode == CMD_NC) &&
+           (buttons[STRONGPUFF_DOWN_BUTTON].mode == CMD_NC) &&
+           (buttons[STRONGPUFF_LEFT_BUTTON].mode == CMD_NC) &&
+           (buttons[STRONGPUFF_RIGHT_BUTTON].mode == CMD_NC));
+}
+
+bool noStrongSipSpecialActions() {
+  return ( (buttons[STRONGSIP_UP_BUTTON].mode == CMD_NC) &&
+           (buttons[STRONGSIP_DOWN_BUTTON].mode == CMD_NC) &&
+           (buttons[STRONGSIP_LEFT_BUTTON].mode == CMD_NC) &&
+           (buttons[STRONGSIP_RIGHT_BUTTON].mode == CMD_NC));
+}
+
 void handleUserInteraction()
 {
   static uint8_t pressureRising = 0, pressureFalling = 0;
@@ -39,15 +54,31 @@ void handleUserInteraction()
   static uint8_t puffCount = 0, sipCount = 0;
   int strongDirThreshold;
 
-  // check physical buttons
+  // handle button press and release actions
   for (int i = 0; i < NUMBER_OF_PHYSICAL_BUTTONS; i++) { // update button press / release events
-    //if one GPIO is locked for serial printing, don't use it.
-    #ifdef DEBUG_LOCK_GPIO    
-      if(input_map[i] != DEBUG_LOCK_GPIO) handleButton(i, digitalRead(input_map[i]) == LOW ? 1 : 0);
-    #else
-      handleButton(i, digitalRead(input_map[i]) == LOW ? 1 : 0);
-    #endif
+    // update and check physical buttons
+    digitalRead(input_map[i]) == LOW ? sensorData.buttonStates |= (1<<i) : sensorData.buttonStates &= ~(1<<i);
+    if  ((sensorData.buttonStates & (1<<i)) != (sensorData.oldButtonStates & (1<<i))) {
+      //if the GPIO is locked for serial printing, don't use it.
+      #ifdef DEBUG_LOCK_GPIO    
+        if(input_map[i] != DEBUG_LOCK_GPIO) {
+          if (sensorData.buttonStates & (1<<i)) handlePress(i); 
+          else  handleRelease(i);
+        }
+      #else
+        if (sensorData.buttonStates & (1<<i)) handlePress(i); 
+        else  handleRelease(i);
+      #endif
+    }
+
+    // check I2C buttons (override physical buttons)
+    if ((sensorData.I2CButtonStates & (1<<i)) != (sensorData.oldI2CButtonStates & (1<<i))) {
+      if (sensorData.I2CButtonStates & (1<<i)) handlePress(i); 
+      else handleRelease(i); // button i was released
+    }
   }
+  sensorData.oldButtonStates = sensorData.buttonStates;
+  sensorData.oldI2CButtonStates = sensorData.I2CButtonStates;
 
   #ifndef FLIPMOUSE
   // SDA&SCL as GPIOs
@@ -56,6 +87,7 @@ void handleUserInteraction()
     handleButton(PUFF_BUTTON, digitalRead(PIN_WIRE1_SCL_) == LOW ? 1 : 0);
   }
   #endif
+
 
   #ifdef FLIPMOUSE
     // check "long-press" of internal button unpairing all BT hosts
@@ -96,8 +128,14 @@ void handleUserInteraction()
       if (sensorData.pressure < slotSettings.tp)
         waitStable++;
       else waitStable = 0;
-      if (waitStable >= STRONGMODE_STABLETIME)
-        strongSipPuffState = STRONG_MODE_STRONGPUFF_ACTIVE;
+      if (waitStable >= STRONGMODE_STABLETIME) {
+        if (noStrongPuffSpecialActions()) {
+          handlePress(STRONGPUFF_BUTTON);
+          handleRelease(STRONGPUFF_BUTTON);
+          strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
+          waitStable = 0;
+        } else strongSipPuffState = STRONG_MODE_STRONGPUFF_ACTIVE;
+      }
       break;
 
     case STRONG_MODE_STRONGPUFF_ACTIVE:    // strong puff mode active
@@ -140,8 +178,15 @@ void handleUserInteraction()
       if (sensorData.pressure > slotSettings.ts)
         waitStable++;
       else waitStable = 0;
-      if (waitStable >= STRONGMODE_STABLETIME)
-        strongSipPuffState = STRONG_MODE_STRONGSIP_ACTIVE;
+      if (waitStable >= STRONGMODE_STABLETIME) {
+        if (noStrongSipSpecialActions()) {
+          handlePress(STRONGSIP_BUTTON);
+          handleRelease(STRONGSIP_BUTTON);
+          strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
+          waitStable = 0;
+        } 
+        else strongSipPuffState = STRONG_MODE_STRONGSIP_ACTIVE;
+      }
       break;
 
     case STRONG_MODE_STRONGSIP_ACTIVE:   // strong sip mode active
@@ -306,9 +351,18 @@ float getAccelFactor() {
 void acceleratedMouseMove(float accelFactor) {
   static float accumXpos = 0;
   static float accumYpos = 0;
+  float moveValX, moveValY;
 
-  float moveValX = sensorData.x * (float)slotSettings.ax * accelFactor;
-  float moveValY = sensorData.y * (float)slotSettings.ay * accelFactor;
+  if (getForceSensorType() != FORCE_FABI_GENERIC)
+  {
+    moveValX = sensorData.x * (float)slotSettings.ax * accelFactor;
+    moveValY = sensorData.y * (float)slotSettings.ay * accelFactor;
+  }
+  else {
+    moveValX = sensorData.xRaw * (float)slotSettings.ax / 50;
+    moveValY = sensorData.yRaw * (float)slotSettings.ay / 50;
+  }
+
   float actSpeed =  sqrtf (moveValX * moveValX + moveValY * moveValY);
   float max_speed = (float)slotSettings.ms / 3.0f;
 

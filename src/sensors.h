@@ -23,11 +23,6 @@
 #include <LoadcellSensor.h>  // for signal conditioning
 #include <Adafruit_NAU7802.h>  //NAU7802 library (Benjamin Aigner's fork with channel change feature)
 
-/**** sensor GPIOs & addresses */
-
-#define MPRLS_ADDR 0x18          // I2C address of the MPRLS pressure sensor 
-#define DPS310_ADDR 0x77         // I2C address of the DPS310 pressure sensor 
-
 /**** MPRLS related signal shaping parameters */
 #define MPRLS_DIVIDER 2                 // divider for the MPRLS raw value.
 #define MEDIAN_VALUES 5                 // number of values used for median-based spike filter (for MPRLS sensor)
@@ -40,11 +35,12 @@
 #define DPS_MEDIAN_VALUES 5                // number of values used for median-based spike filter (for MPRLS sensor)
 
 /**** NAU7802 related signal shaping parameters */
-#define NAU_DIVIDER 120                 // divider for the NAU raw values
+#define NAU_DIVIDER 120               // divider for the NAU raw values
 
 /**** general sensor related settings */
-#define SENSOR_WATCHDOG_TIMEOUT 3000    // watchdog reset time (no NAU sensor data for x millsec. resets device)
-#define PRESSURE_SAMPLINGRATE   100     // sampling frequency of pressure sensor (MPRLS or DPS)
+#define SENSOR_WATCHDOG_TIMEOUT    3000   // watchdog reset time (no NAU sensor data for x millsec. resets device)
+#define PRESSURE_MAX_SAMPLINGRATE   100   // maximum sampling frequency of pressure sensors
+#define FORCE_MAX_SAMPLINGRATE      100   // maximum sampling frequency of force sensors
 
 /**** detection threshold for floating ADC pin */
 #define PINFLOAT_DIFFERENCE_THRESHOLD 500
@@ -54,14 +50,14 @@
    @brief Used pressure sensor type. We can use either an analog sensor connected to an ADC pin 
    (e.g. the MPXV7007GP) or the DPS310 / MPRLS sensor boards with I2C
 */
-typedef enum {PRESSURE_INTERNAL_ADC, PRESSURE_DPS310, PRESSURE_MPRLS, PRESSURE_NONE} pressureSensor_type_t;
+typedef enum {PRESSURE_INTERNAL_ADC, PRESSURE_DPS310, PRESSURE_MPRLS, PRESSURE_FABI_GENERIC, PRESSURE_NONE} pressureSensor_type_t;
 
 
 /**
    @brief Used force sensor type. We can use the Sensorboard (NAU7802 with Strain gauge or resistive sensors)
    or 2 internal ADC channels.
 */
-typedef enum {FORCE_INTERNAL_ADC, FORCE_NAU7802, FORCE_NONE} forceSensor_type_t;
+typedef enum {FORCE_INTERNAL_ADC, FORCE_NAU7802, FORCE_FABI_GENERIC, FORCE_NONE} forceSensor_type_t;
 
 /**
    @brief Data structure for sensor updates performed by Core1.
@@ -72,6 +68,7 @@ struct CurrentSensorDataCore1 {
   uint16_t calib_now;    // calibration counter, to initiate a calibration procedure
   int calibX;  // x-axis calibration for using internal ADC
   int calibY;  // y-axis calibration for using internal ADC
+  uint8_t I2CButtonStates;      // current button states from I2C FABI generic sensor interface
   pressureSensor_type_t pressureSensorType;
   forceSensor_type_t forceSensorType;
   mutex_t sensorDataMutex; // for synchronization of data access between cores
@@ -81,6 +78,25 @@ struct CurrentSensorDataCore1 {
 //extern forceSensor_type_t forceSensorType;
 
 extern struct CurrentSensorDataCore1 currentSensorDataCore1;
+
+
+// data structure for FABI I2C transmission
+
+#define FABI_I2C_CMD_GET_CAPS     0xFF    // command to request device capabilities bitmask
+
+#define FABI_I2C_CAP_XY        (1<<0)  // bitmask for 1st data field in FABI generic sensor I2C report: int16_t x / int16_t y  (4 bytes)
+#define FABI_I2C_CAP_PRESSURE  (1<<1)  // bitmask for 3rd data field in FABI generic sensor I2C report: int16_t pressure       (2 bytes)
+#define FABI_I2C_CAP_BUTTONS   (1<<2)  // bitmask for 4th data field in FABI generic sensor I2C report: uint16_t buttons       (2 bytes)
+  
+
+typedef struct {
+  uint8_t reportType;      // first byte contains flags (bitmask) for transferred data fields
+  int16_t x;
+  int16_t y;
+  uint16_t pressure;
+  uint16_t button_states;
+} i2c_fabi_data_t;
+
 
 /**
    @brief Sensorboard IDs for different signal processing parameters

@@ -211,6 +211,7 @@ void reportCapabilities(uint16_t mask) {
       case PRESSURE_NONE: Serial.print("None"); break;
       case PRESSURE_DPS310: Serial.print("DSP310"); break;
       case PRESSURE_MPRLS: Serial.print("MPRLS"); break;
+      case PRESSURE_FABI_GENERIC: Serial.print("InternalADC"); break; // TBD: add support in WebGUI for Serial.print("FABIGeneric"); break;
       case PRESSURE_INTERNAL_ADC: Serial.print("InternalADC"); break;
     }
   }
@@ -220,6 +221,7 @@ void reportCapabilities(uint16_t mask) {
     switch (getForceSensorType()) {
       case FORCE_NONE: Serial.print("None"); break;
       case FORCE_NAU7802: Serial.print("NAU7802"); break;
+      case FORCE_FABI_GENERIC: Serial.print("InternalADC"); break; // TBD: add support in WebGUI for Serial.print("FABIGeneric"); break;
       case FORCE_INTERNAL_ADC: Serial.print("InternalADC"); break;
     }
   }
