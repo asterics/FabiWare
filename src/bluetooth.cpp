@@ -79,15 +79,15 @@
     static int accuX = 0, accuY = 0;
   
   #ifdef DEBUG_OUTPUT_FULL
-    Serial.println("BT mouse actions:");
-    Serial.print("buttons: 0x");
-    Serial.println(activeMouseButtons, HEX);
-    Serial.print("x/y/scroll: ");
-    Serial.print(x, DEC);
-    Serial.print("/");
-    Serial.print(y, DEC);
-    Serial.print("/");
-    Serial.println(scroll, DEC);
+    DEBUG_OUT.println("BT mouse actions:");
+    DEBUG_OUT.print("buttons: 0x");
+    DEBUG_OUT.println(activeMouseButtons, HEX);
+    DEBUG_OUT.print("x/y/scroll: ");
+    DEBUG_OUT.print(x, DEC);
+    DEBUG_OUT.print("/");
+    DEBUG_OUT.print(y, DEC);
+    DEBUG_OUT.print("/");
+    DEBUG_OUT.println(scroll, DEC);
   #endif
   
     accuX += x;
@@ -179,16 +179,16 @@
   void sendBTKeyboardReport()
   {
   #ifdef DEBUG_OUTPUT_FULL
-    Serial.println("BT keyboard actions:");
-    Serial.print("modifier: 0x");
-    Serial.println(activeModifierKeys, HEX);
-    Serial.println("activeKeyCodes: ");
-    Serial.println(activeKeyCodes[0], HEX);
-    Serial.println(activeKeyCodes[1], HEX);
-    Serial.println(activeKeyCodes[2], HEX);
-    Serial.println(activeKeyCodes[3], HEX);
-    Serial.println(activeKeyCodes[4], HEX);
-    Serial.println(activeKeyCodes[5], HEX);
+    DEBUG_OUT.println("BT keyboard actions:");
+    DEBUG_OUT.print("modifier: 0x");
+    DEBUG_OUT.println(activeModifierKeys, HEX);
+    DEBUG_OUT.println("activeKeyCodes: ");
+    DEBUG_OUT.println(activeKeyCodes[0], HEX);
+    DEBUG_OUT.println(activeKeyCodes[1], HEX);
+    DEBUG_OUT.println(activeKeyCodes[2], HEX);
+    DEBUG_OUT.println(activeKeyCodes[3], HEX);
+    DEBUG_OUT.println(activeKeyCodes[4], HEX);
+    DEBUG_OUT.println(activeKeyCodes[5], HEX);
   #endif
   
     Serial_AUX.write((uint8_t)0xFD);            //raw HID
@@ -351,7 +351,7 @@
   void initBluetooth()
   {
   #ifdef DEBUG_OUTPUT_FULL
-    Serial.println("init Bluetooth");
+    DEBUG_OUT.println("init Bluetooth");
   #endif
     //start the AUX serial port 115200 8N1
     ///@note FM2 uses 9k6, ESP32 firmware must detect board and baud rate setting

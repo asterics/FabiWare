@@ -86,14 +86,14 @@ void parseCommand (char * cmdstr)
   char * lastpos = cmdstr + strlen(cmdstr);
 
 #ifdef DEBUG_OUTPUT_FULL
-  Serial.print("parseCommand:"); Serial.println(cmdstr);
+  DEBUG_OUT.print("parseCommand:"); DEBUG_OUT.println(cmdstr);
 #endif
   char * actpos = strtok(cmdstr, " ");  // see a nice explaination of strtok here:  http://www.reddit.com/r/arduino/comments/2h9l1l/using_the_strtok_function/
 
   if (actpos)
   {
 #ifdef DEBUG_OUTPUT_FULL
-    Serial.print("actpos:"); Serial.println(actpos);
+    DEBUG_OUT.print("actpos:"); DEBUG_OUT.println(actpos);
 #endif
     int i;
     strup(actpos);

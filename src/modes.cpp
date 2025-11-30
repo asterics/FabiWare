@@ -59,20 +59,35 @@ void handleUserInteraction()
     // update and check physical buttons
     digitalRead(input_map[i]) == LOW ? sensorData.buttonStates |= (1<<i) : sensorData.buttonStates &= ~(1<<i);
     if  ((sensorData.buttonStates & (1<<i)) != (sensorData.oldButtonStates & (1<<i))) {
-      if (sensorData.buttonStates & (1<<i)) handlePress(i); 
-      else  handleRelease(i);
+      //if the GPIO is locked for serial printing, don't use it.
+      #ifdef DEBUG_LOCK_GPIO    
+        if(input_map[i] != DEBUG_LOCK_GPIO) {
+          if (sensorData.buttonStates & (1<<i)) handlePress(i); 
+          else  handleRelease(i);
+        }
+      #else
+        if (sensorData.buttonStates & (1<<i)) handlePress(i); 
+        else  handleRelease(i);
+      #endif
     }
-    sensorData.oldButtonStates = sensorData.buttonStates;
 
-    for (int i = 0; i < NUMBER_OF_PHYSICAL_BUTTONS; i++) { // update button press / release events
-      // check I2C buttons (override physical buttons)
-      if ((sensorData.I2CButtonStates & (1<<i)) != (sensorData.oldI2CButtonStates & (1<<i))) {
-        if (sensorData.I2CButtonStates & (1<<i)) handlePress(i); 
-        else handleRelease(i); // button i was released
-      }
+    // check I2C buttons (override physical buttons)
+    if ((sensorData.I2CButtonStates & (1<<i)) != (sensorData.oldI2CButtonStates & (1<<i))) {
+      if (sensorData.I2CButtonStates & (1<<i)) handlePress(i); 
+      else handleRelease(i); // button i was released
     }
-    sensorData.oldI2CButtonStates = sensorData.I2CButtonStates;
   }
+  sensorData.oldButtonStates = sensorData.buttonStates;
+  sensorData.oldI2CButtonStates = sensorData.I2CButtonStates;
+
+  #ifndef FLIPMOUSE
+  // SDA&SCL as GPIOs
+  if(useI2CasGPIO) {
+    handleButton(SIP_BUTTON, digitalRead(PIN_WIRE1_SDA_) == LOW ? 1 : 0);
+    handleButton(PUFF_BUTTON, digitalRead(PIN_WIRE1_SCL_) == LOW ? 1 : 0);
+  }
+  #endif
+
 
   #ifdef FLIPMOUSE
     // check "long-press" of internal button unpairing all BT hosts

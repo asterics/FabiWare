@@ -144,7 +144,7 @@ void audioRemove(char * fn) {
   char soundFilename[MAX_PATH_LEN];
   prepSoundFilename(soundFilename, fn);
   #ifdef DEBUG_OUTPUT_FULL
-    Serial.println("\nRemove Sound File "+String(soundFilename));
+    DEBUG_OUT.println("\nRemove Sound File "+String(soundFilename));
   #endif
   LittleFS.remove(soundFilename);
 }
@@ -160,7 +160,7 @@ void audioRemove(char * fn) {
     char soundFilename[MAX_PATH_LEN];
     prepSoundFilename(soundFilename, fn);
     #ifdef DEBUG_OUTPUT_FULL
-      Serial.println("\nPlay Sound File "+String(soundFilename));
+      DEBUG_OUT.println("\nPlay Sound File "+String(soundFilename));
     #endif
     sampleData.file = LittleFS.open(soundFilename, "r");
     if (sampleData.file.available()) {
@@ -173,7 +173,7 @@ void audioRemove(char * fn) {
       else digitalWrite(AUDIO_AMP_SD_PIN, HIGH);  // turn no audio amp
     } else {
       #ifdef DEBUG_OUTPUT_FULL
-        Serial.printf("cound not open file ...");
+        DEBUG_OUT.printf("cound not open file ...");
       #endif
     }
   #endif
@@ -196,8 +196,8 @@ uint8_t audioTransfer(char * fn) {
 
   prepSoundFilename(soundFilename, fn);
   #ifdef DEBUG_OUTPUT_FULL
-    Serial.print("\nStart upload of SoundFile: ");
-    Serial.println(soundFilename);
+    DEBUG_OUT.print("\nStart upload of SoundFile: ");
+    DEBUG_OUT.println(soundFilename);
   #endif
 
   uint32_t ts=millis();
@@ -218,7 +218,7 @@ uint8_t audioTransfer(char * fn) {
     // read timeout: transfer finished!
     f.close();
     #ifdef DEBUG_OUTPUT_FULL
-      Serial.println("\nSound File "+String(soundFilename)+" received, " + String(cnt) + " bytes read!");
+      DEBUG_OUT.println("\nSound File "+String(soundFilename)+" received, " + String(cnt) + " bytes read!");
     #endif
     sampleData.len=cnt;
     cnt = 0;
