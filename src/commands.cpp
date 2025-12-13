@@ -26,6 +26,7 @@
 #include "parser.h"
 #include "reporting.h"
 #include "sensors.h"
+#include "sensors/Force_NAU7802.h"
 #include <hardware/watchdog.h>
 
 /**
