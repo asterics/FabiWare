@@ -30,23 +30,19 @@
 
 LoadcellSensor XS, YS;
 LoadcellSensor PS;
-int sensorWatchdog = -1;
-uint8_t reportXValues = 0;
-uint8_t reportYValues = 0;
 
 // sensor modules
-static ForceNAU7802  nau(DRDY_PIN);
-static PressureDPS310 dps;
-static PressureMPRLS mprls;
-static FabiGenericI2C fabi;
-static PressureAnalog panalog(ANALOG_PRESSURE_SENSOR_PIN);
-static ForceAnalog fanalog(ANALOG_FORCE_SENSOR_X_PIN, ANALOG_FORCE_SENSOR_Y_PIN);
+static PressureDPS310 pressureSensor_DPS;
+static PressureMPRLS  pressureSensor_MPRLS;
+static PressureAnalog pressureSensor_ADC(ANALOG_PRESSURE_SENSOR_PIN);
+static ForceNAU7802   forceSensor_NAU(DRDY_PIN);
+static ForceAnalog    forceSensor_ADC(ANALOG_FORCE_SENSOR_X_PIN, ANALOG_FORCE_SENSOR_Y_PIN);
+static FabiGenericI2C genericSensorInterface;
 
 // available generic sensor interfaces
-static IPressureSensor* gPressure = nullptr;
-static IForceSensor* gForce = nullptr;
-static IButtonSource* gButtons = nullptr;
-static FabiGenericI2C* gFabiAddon = nullptr;
+static IPressureSensor * gPressure = nullptr;
+static IForceSensor    * gForce = nullptr;
+static IButtonSensor   * gButtons = nullptr;
 
 // Global structure for passing sensor data to other core
 struct CurrentSensorDataCore1 currentSensorDataCore1 {        
@@ -65,15 +61,15 @@ void initSensors()
 {
   // Detect and initialize available pressure sensors
   currentSensorDataCore1.pressureSensorType = PRESSURE_NONE;
-  if (dps.init()) {
+  if (pressureSensor_DPS.init()) {
     currentSensorDataCore1.pressureSensorType = PRESSURE_DPS310;
-    gPressure = &dps;
-  } else if (mprls.init()) {
+    gPressure = &pressureSensor_DPS;
+  } else if (pressureSensor_MPRLS.init()) {
     currentSensorDataCore1.pressureSensorType = PRESSURE_MPRLS;
-    gPressure = &mprls;
-  } else if (panalog.init()) {
-      currentSensorDataCore1.pressureSensorType = PRESSURE_INTERNAL_ADC;
-      gPressure = &panalog;
+    gPressure = &pressureSensor_MPRLS;
+  } else if (pressureSensor_ADC.init()) {
+    currentSensorDataCore1.pressureSensorType = PRESSURE_INTERNAL_ADC;
+    gPressure = &pressureSensor_ADC;
   }
 
   if (currentSensorDataCore1.pressureSensorType == PRESSURE_NONE) {
@@ -84,37 +80,48 @@ void initSensors()
 
   // Detect and initialize available force sensors
   currentSensorDataCore1.forceSensorType = FORCE_NONE;
-  if (nau.init()) {
+  if (forceSensor_NAU.init()) {
     currentSensorDataCore1.forceSensorType = FORCE_NAU7802;
-    gForce = &nau;
-  } else if (fabi.init()) {
-
-    gFabiAddon = &fabi;
+    gForce = &forceSensor_NAU;
+  } else if (genericSensorInterface.init()) {
 
     // get capabilities and update sensor types accordingly
-    uint8_t FABIAddOnCapabilities = fabi.getCapabilities();
+    uint8_t addOnCapabilities = genericSensorInterface.getCapabilities();
 
-    if (FABIAddOnCapabilities & FABI_I2C_CAP_XY) {
-      gForce = &fabi; 
+    if (addOnCapabilities & FABI_I2C_CAP_XY) {
+      gForce = &genericSensorInterface; 
       currentSensorDataCore1.forceSensorType = FORCE_FABI_GENERIC;
     }
-    if (FABIAddOnCapabilities & FABI_I2C_CAP_PRESSURE) {
-      gPressure = &fabi; 
+    if (addOnCapabilities & FABI_I2C_CAP_PRESSURE) {
+      gPressure = &genericSensorInterface; 
       currentSensorDataCore1.pressureSensorType = PRESSURE_FABI_GENERIC;
     }
-    if (FABIAddOnCapabilities & FABI_I2C_CAP_BUTTONS) {
-      gButtons = &fabi; 
+    if (addOnCapabilities & FABI_I2C_CAP_BUTTONS) {
+      gButtons = &genericSensorInterface; 
     }
-  } else if (fanalog.init()) {
+  } else if (forceSensor_ADC.init()) {
       currentSensorDataCore1.forceSensorType = FORCE_INTERNAL_ADC;
+
+      // handle special cases for ADC force sensor
       #ifndef FLIPMOUSE
-        // in case the FABI3 PCB is used, we cannot use internal ADC0 for force and pressure ...
+        // in case the FABI3 PCB is used, we cannot use internal ADC0 for both (force and pressure) ...
         if (currentSensorDataCore1.pressureSensorType == PRESSURE_INTERNAL_ADC) { 
           currentSensorDataCore1.pressureSensorType = PRESSURE_NONE;
+          gPressure = nullptr;
+        }
+
+        // if no I2C devices are detected on Wire1, we can use the SDA/SCL pins as GPIOs for the analog sensors!
+        if(testI2Cdevices(&Wire1) == 0) {
+          currentState.useI2CasGPIO = true;
+          //Serial.println("I2C->GPIO");
+          Wire1.end();
+          pinMode(PIN_WIRE1_SDA_,INPUT_PULLUP);
+          pinMode(PIN_WIRE1_SCL_,INPUT_PULLUP);
         }
       #endif
-      gForce = &fanalog;
+      gForce = &forceSensor_ADC;
   }
+
 }
 
 
@@ -125,28 +132,23 @@ void initSensors()
 */
 void readPressure()
 {
-  int actPressure = 512;
-  int newData = 0;
-
   NB_DELAY_START(pressure_ts, 1000 / PRESSURE_MAX_SAMPLINGRATE)
     if (gPressure) {
+      int actPressure = 512;
       PressureSample s = gPressure->readPressure();
       if (s.hasData) {
         actPressure = s.raw;
-        newData = 1;
+        // limit pressure values to valid range (0 and 1023 are reserved for bypass)
+        if (actPressure < 1) actPressure = 1;
+        if (actPressure > 1022) actPressure = 1022;
+
+        if (currentSensorDataCore1.calib_now) actPressure = 512;
+        mutex_enter_blocking(&(currentSensorDataCore1.sensorDataMutex));
+        currentSensorDataCore1.pressure = actPressure;
+        mutex_exit(&(currentSensorDataCore1.sensorDataMutex));
       }
     }
 
-    // limit pressure values to valid range (0 and 1023 are reserved for bypass)
-    if (actPressure < 1) actPressure = 1;
-    if (actPressure > 1022) actPressure = 1022;
-
-    if (currentSensorDataCore1.calib_now) actPressure = 512;
-    if (newData) {
-      mutex_enter_blocking(&(currentSensorDataCore1.sensorDataMutex));
-      currentSensorDataCore1.pressure = actPressure;
-      mutex_exit(&(currentSensorDataCore1.sensorDataMutex));
-    }
   NB_DELAY_END
 }
 
@@ -157,12 +159,9 @@ void readPressure()
 */
 void readForce()
 {
-  static uint8_t printCount = 0;
-  uint8_t newData=0;
-  int32_t currentX = 0, currentY = 0;
-
   NB_DELAY_START(force_ts, 1000 / FORCE_MAX_SAMPLINGRATE)
     if (gForce) {
+      int32_t currentX = 0, currentY = 0;
       ForceSample s = gForce->readForce();
       if (s.hasData) {
         currentX = s.xRaw;
@@ -171,10 +170,24 @@ void readForce()
           currentX = 0;
           currentY = 0;
         }
-        newData = 1;
+        mutex_enter_blocking(&(currentSensorDataCore1.sensorDataMutex));
+        currentSensorDataCore1.xRaw =  currentX;
+        currentSensorDataCore1.yRaw =  currentY;
+        mutex_exit(&(currentSensorDataCore1.sensorDataMutex));
       }
     }
+  NB_DELAY_END
+}
 
+
+/**
+   @name readButtons
+   @brief updates and processes new button sensor values
+   @return none
+*/
+void readButtons()
+{
+  NB_DELAY_START(buttons_ts, 1000 / BUTTONS_MAX_SAMPLINGRATE)
     // read buttons from generic I2C addon if available
     if (gButtons) {
       ButtonSample bs = gButtons->readButtons();
@@ -183,13 +196,6 @@ void readForce()
         currentSensorDataCore1.I2CButtonStates = bs.buttons;
         mutex_exit(&(currentSensorDataCore1.sensorDataMutex));
       }
-    }
-
-    if (newData) {
-      mutex_enter_blocking(&(currentSensorDataCore1.sensorDataMutex));
-      currentSensorDataCore1.xRaw =  currentX;
-      currentSensorDataCore1.yRaw =  currentY;
-      mutex_exit(&(currentSensorDataCore1.sensorDataMutex));
     }
   NB_DELAY_END
 }
@@ -201,15 +207,15 @@ void readForce()
    @param sensorData: pointer to SensorData struct, used by core0
    @return none
 */
-void calculateDirection(struct SensorData * sensorData)
+void calculateDirection(struct CurrentState * currentState)
 {
-  sensorData->forceRaw = sqrtf(sensorData->xRaw * sensorData->xRaw + sensorData->yRaw * sensorData->yRaw);
-  if (sensorData->forceRaw != 0) {
-    sensorData->angle = atan2f ((float)sensorData->yRaw / sensorData->forceRaw, (float)sensorData->xRaw / sensorData->forceRaw );
+  currentState->forceRaw = sqrtf(currentState->xRaw * currentState->xRaw + currentState->yRaw * currentState->yRaw);
+  if (currentState->forceRaw != 0) {
+    currentState->angle = atan2f ((float)currentState->yRaw / currentState->forceRaw, (float)currentState->xRaw / currentState->forceRaw );
 
     // get 8 directions
-    sensorData->dir = (180 + 22 + (int)(sensorData->angle * 57.29578)) / 45 + 1; // translate rad to deg and make 8 sections
-    if (sensorData->dir > 8) sensorData->dir = 1;
+    currentState->dir = (180 + 22 + (int)(currentState->angle * 57.29578)) / 45 + 1; // translate rad to deg and make 8 sections
+    if (currentState->dir > 8) currentState->dir = 1;
   }
 }
 
@@ -220,38 +226,38 @@ void calculateDirection(struct SensorData * sensorData)
    @param slotSettings: pointer to SlotSettings struct, used by core0
    @return none
 */
-void applyDeadzone(struct SensorData * sensorData, struct SlotSettings * slotSettings)
+void applyDeadzone(struct CurrentState * currentState, struct SlotSettings * slotSettings)
 {
   if (slotSettings->stickMode == STICKMODE_ALTERNATIVE) {
 
     // rectangular deadzone for alternative modes
-    if (sensorData->xRaw < -slotSettings->dx)
-      sensorData->x = sensorData->xRaw + slotSettings->dx; // apply deadzone values x direction
-    else if (sensorData->xRaw > slotSettings->dx)
-      sensorData->x = sensorData->xRaw - slotSettings->dx;
-    else sensorData->x = 0;
+    if (currentState->xRaw < -slotSettings->dx)
+      currentState->x = currentState->xRaw + slotSettings->dx; // apply deadzone values x direction
+    else if (currentState->xRaw > slotSettings->dx)
+      currentState->x = currentState->xRaw - slotSettings->dx;
+    else currentState->x = 0;
 
-    if (sensorData->yRaw < -slotSettings->dy)
-      sensorData->y = sensorData->yRaw + slotSettings->dy; // apply deadzone values y direction
-    else if (sensorData->yRaw > slotSettings->dy)
-      sensorData->y = sensorData->yRaw - slotSettings->dy;
-    else sensorData->y = 0;
+    if (currentState->yRaw < -slotSettings->dy)
+      currentState->y = currentState->yRaw + slotSettings->dy; // apply deadzone values y direction
+    else if (currentState->yRaw > slotSettings->dy)
+      currentState->y = currentState->yRaw - slotSettings->dy;
+    else currentState->y = 0;
 
   } else {
 
     //  circular deadzone for mouse control
-    if (sensorData->forceRaw != 0) {
+    if (currentState->forceRaw != 0) {
       float a = slotSettings->dx > 0 ? slotSettings->dx : 1 ;
       float b = slotSettings->dy > 0 ? slotSettings->dy : 1 ;
-      float s = sinf(sensorData->angle);
-      float c = cosf(sensorData->angle);
-      sensorData->deadZone =  a * b / sqrtf(a * a * s * s + b * b * c * c); // ellipse equation, polar form
+      float s = sinf(currentState->angle);
+      float c = cosf(currentState->angle);
+      currentState->deadZone =  a * b / sqrtf(a * a * s * s + b * b * c * c); // ellipse equation, polar form
     }
-    else sensorData->deadZone = slotSettings->dx;
+    else currentState->deadZone = slotSettings->dx;
 
-    sensorData->force = (sensorData->forceRaw < sensorData->deadZone) ? 0 : sensorData->forceRaw - sensorData->deadZone;
-    sensorData->x = (int) (sensorData->force * cosf(sensorData->angle));
-    sensorData->y = (int) (sensorData->force * sinf(sensorData->angle));
+    currentState->force = (currentState->forceRaw < currentState->deadZone) ? 0 : currentState->forceRaw - currentState->deadZone;
+    currentState->x = (int) (currentState->force * cosf(currentState->angle));
+    currentState->y = (int) (currentState->force * sinf(currentState->angle));
   }
 }
 
@@ -261,6 +267,8 @@ void applyDeadzone(struct SensorData * sensorData, struct SlotSettings * slotSet
    @return true: value within normal range  false: value exceeded -> action must be taken
 */
 uint8_t checkSensorWatchdog() {
+  static int sensorWatchdog = -1;
+
   // if we never received any valid I2C sensor values, proceed
   if (sensorWatchdog == -1) return (true);
   // if we received valid sensor values at least once, 
@@ -315,3 +323,52 @@ pressureSensor_type_t getPressureSensorType(){
   return (currentSensorDataCore1.pressureSensorType);
 }
 
+
+/**
+   @name testI2CDevices
+   @brief checks if I2C devices are present on the given interface and fills the device_list array accordingly
+   @param interface: TwoWire interface to check (Wire or Wire1)
+   @param resetIfChanged: if true, a reset will be performed if a change in the device list is detected
+   @return number of detected devices
+*/
+int testI2Cdevices(TwoWire *interface, bool resetIfChanged) {
+
+  static uint8_t devicesWire[8] = {0};     // active I2C devices on Wire
+  static uint8_t devicesWire1[8] = {0};    // active I2C devices on Wire1
+
+  uint8_t *device_list = (interface == &Wire) ? devicesWire : devicesWire1;  
+
+  //create a copy of list before checking again
+  uint8_t olddevices[8];
+  memcpy(olddevices, device_list, 8);
+
+  int devicenr = 0;     //currently used I2C address index of supported_devices[]
+  int devicecount = 0;  //count of found devices, used as offset in active devices (devicesWire[])
+
+  //reset device list
+  memset(device_list,0,8);
+
+  while(supported_devices[devicenr] != 0x00) { //test until address is 0x00
+    interface->beginTransmission(supported_devices[devicenr]);
+    uint8_t result = interface->endTransmission();
+    //if found: add to array of active devices
+    if (result == 0) {
+      #ifdef DEBUG_OUTPUT_I2C_SCAN
+        DEBUG_OUT.print("Found device @0x");
+        DEBUG_OUT.println(supported_devices[devicenr],HEX);
+      #endif
+      device_list[devicecount] = supported_devices[devicenr];
+      devicecount++;
+    }
+    devicenr++;
+  }
+
+  if (resetIfChanged) {
+    if (memcmp(olddevices, device_list, 8) != 0) { 
+      Serial.println("Devices on I2C bus changed -> restarting!");
+      watchdog_reboot(0, 0, 10);
+      while (1);
+    }
+  }
+  return devicecount;
+}

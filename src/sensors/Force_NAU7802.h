@@ -18,9 +18,6 @@ class Adafruit_NAU7802;
 #define SENSORBOARD_SMD_MEDIUM   5
 #define SENSORBOARD_SMD_LOW      6
 #define SENSORBOARD_SMD_VERY_LOW 7
-#define SENSORBOARD_REPORT_X    10   // enable / disable signal processing values reporting for X axis
-#define SENSORBOARD_REPORT_Y    11   // enable / disable signal processing values reporting for Y axis
-
 
 // NAU7802-specific parameters
 #define NAU_DIVIDER 120

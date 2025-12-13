@@ -145,8 +145,8 @@ void handleRelease (int buttonIndex)    // a button was released: deal with "sti
   buttonStates &= ~(1<<buttonIndex); //save for reporting
   switch (buttons[buttonIndex].mode) {
     // release mouse actions
-    case CMD_MX: sensorData.autoMoveX = 0; break;
-    case CMD_MY: sensorData.autoMoveY = 0; break;
+    case CMD_MX: currentState.autoMoveX = 0; break;
+    case CMD_MY: currentState.autoMoveY = 0; break;
     case CMD_PL:
     case CMD_HL:
       mouseRelease(MOUSE_LEFT);

@@ -186,10 +186,10 @@ struct SlotSettings {
 
 
 /**
-   SensorData structs
-   contain working data of sensors (raw and processed values)
+   CurrentState struct 
+   contains working data of sensors (raw and processed values) and other runtime data
 */
-struct SensorData {
+struct CurrentState {
   int x, y, xRaw,yRaw;
   int pressure;
   float deadZone, force, forceRaw, angle;
@@ -203,6 +203,9 @@ struct SensorData {
   bool usbConnected;
   uint8_t buttonStates, oldButtonStates;
   uint8_t I2CButtonStates, oldI2CButtonStates;
+  uint8_t actSlot;                   // number of current slot
+  bool useI2CasGPIO;                 // if set, we will use the SDA/SCL lines of Wire1 as GPIOs, set when INTERNAL_ADC is used and no I2C devices detected on startup.
+  uint8_t goingToSleep;              // flag to indicate that the device is going to sleep mode
 };
 
 /**
@@ -212,13 +215,10 @@ struct SensorData {
 
 extern alarm_pool_t *app_alarm_pool;
 extern char moduleName[];
-extern uint8_t actSlot;
-extern bool useI2CasGPIO;
-extern uint8_t goingToSleep;
 extern uint8_t addonUpgrade;
 extern struct GlobalSettings globalSettings;
 extern struct SlotSettings slotSettings; 
-extern struct SensorData sensorData;
+extern struct CurrentState currentState;
 extern struct CurrentSensorDataCore1 currentSensorDataCore1;
 extern const struct SlotSettings defaultSlotSettings;
 extern uint8_t workingmem[WORKINGMEM_SIZE];            // working memory  (command parser, IR-rec/play)

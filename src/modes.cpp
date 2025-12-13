@@ -57,32 +57,32 @@ void handleUserInteraction()
   // handle button press and release actions
   for (int i = 0; i < NUMBER_OF_PHYSICAL_BUTTONS; i++) { // update button press / release events
     // update and check physical buttons
-    digitalRead(input_map[i]) == LOW ? sensorData.buttonStates |= (1<<i) : sensorData.buttonStates &= ~(1<<i);
-    if  ((sensorData.buttonStates & (1<<i)) != (sensorData.oldButtonStates & (1<<i))) {
+    digitalRead(input_map[i]) == LOW ? currentState.buttonStates |= (1<<i) : currentState.buttonStates &= ~(1<<i);
+    if  ((currentState.buttonStates & (1<<i)) != (currentState.oldButtonStates & (1<<i))) {
       //if the GPIO is locked for serial printing, don't use it.
       #ifdef DEBUG_LOCK_GPIO    
         if(input_map[i] != DEBUG_LOCK_GPIO) {
-          if (sensorData.buttonStates & (1<<i)) handlePress(i); 
+          if (currentState.buttonStates & (1<<i)) handlePress(i); 
           else  handleRelease(i);
         }
       #else
-        if (sensorData.buttonStates & (1<<i)) handlePress(i); 
+        if (currentState.buttonStates & (1<<i)) handlePress(i); 
         else  handleRelease(i);
       #endif
     }
 
     // check I2C buttons (override physical buttons)
-    if ((sensorData.I2CButtonStates & (1<<i)) != (sensorData.oldI2CButtonStates & (1<<i))) {
-      if (sensorData.I2CButtonStates & (1<<i)) handlePress(i); 
+    if ((currentState.I2CButtonStates & (1<<i)) != (currentState.oldI2CButtonStates & (1<<i))) {
+      if (currentState.I2CButtonStates & (1<<i)) handlePress(i); 
       else handleRelease(i); // button i was released
     }
   }
-  sensorData.oldButtonStates = sensorData.buttonStates;
-  sensorData.oldI2CButtonStates = sensorData.I2CButtonStates;
+  currentState.oldButtonStates = currentState.buttonStates;
+  currentState.oldI2CButtonStates = currentState.I2CButtonStates;
 
   #ifndef FLIPMOUSE
   // SDA&SCL as GPIOs
-  if(useI2CasGPIO) {
+  if(currentState.useI2CasGPIO) {
     handleButton(SIP_BUTTON, digitalRead(PIN_WIRE1_SDA_) == LOW ? 1 : 0);
     handleButton(PUFF_BUTTON, digitalRead(PIN_WIRE1_SCL_) == LOW ? 1 : 0);
   }
@@ -102,9 +102,9 @@ void handleUserInteraction()
   #endif  
 
   // check sip/puff activities
-  if (sensorData.pressure > previousPressure) pressureRising = 1; else pressureRising = 0;
-  if (sensorData.pressure < previousPressure) pressureFalling = 1; else pressureFalling = 0;
-  previousPressure = sensorData.pressure;
+  if (currentState.pressure > previousPressure) pressureRising = 1; else pressureRising = 0;
+  if (currentState.pressure < previousPressure) pressureFalling = 1; else pressureFalling = 0;
+  previousPressure = currentState.pressure;
 
   if (slotSettings.stickMode == STICKMODE_ALTERNATIVE)
     strongDirThreshold = 0;
@@ -114,18 +114,18 @@ void handleUserInteraction()
   switch (strongSipPuffState)  {
 
     case STRONG_MODE_IDLE:   // IDLE
-      if (sensorData.pressure > slotSettings.sp) {
+      if (currentState.pressure > slotSettings.sp) {
         strongSipPuffState = STRONG_MODE_ENTER_STRONGPUFF;
         makeTone(TONE_ENTER_STRONGPUFF, 0 );
       }
-      if (sensorData.pressure < slotSettings.ss ) {
+      if (currentState.pressure < slotSettings.ss ) {
         strongSipPuffState = STRONG_MODE_ENTER_STRONGSIP;
         makeTone(TONE_ENTER_STRONGSIP, 0 );
       }
       break;
 
     case STRONG_MODE_ENTER_STRONGPUFF:     // puffed strong, wait for release
-      if (sensorData.pressure < slotSettings.tp)
+      if (currentState.pressure < slotSettings.tp)
         waitStable++;
       else waitStable = 0;
       if (waitStable >= STRONGMODE_STABLETIME) {
@@ -139,25 +139,25 @@ void handleUserInteraction()
       break;
 
     case STRONG_MODE_STRONGPUFF_ACTIVE:    // strong puff mode active
-      if (sensorData.y < -strongDirThreshold) {
+      if (currentState.y < -strongDirThreshold) {
         makeTone(TONE_EXIT_STRONGPUFF, 0 );
         handlePress(STRONGPUFF_UP_BUTTON); handleRelease(STRONGPUFF_UP_BUTTON);
         strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
         waitStable = 0;
       }
-      else if (sensorData.x < -strongDirThreshold) {
+      else if (currentState.x < -strongDirThreshold) {
         makeTone(TONE_EXIT_STRONGPUFF, 0 );
         handlePress(STRONGPUFF_LEFT_BUTTON); handleRelease(STRONGPUFF_LEFT_BUTTON);
         strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
         waitStable = 0;
       }
-      else if (sensorData.x > strongDirThreshold) {
+      else if (currentState.x > strongDirThreshold) {
         makeTone(TONE_EXIT_STRONGPUFF, 0 );
         handlePress(STRONGPUFF_RIGHT_BUTTON); handleRelease(STRONGPUFF_RIGHT_BUTTON);
         strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
         waitStable = 0;
       }
-      else if (sensorData.y > strongDirThreshold) {
+      else if (currentState.y > strongDirThreshold) {
         makeTone(TONE_EXIT_STRONGPUFF, 0 );
         handlePress(STRONGPUFF_DOWN_BUTTON); handleRelease(STRONGPUFF_DOWN_BUTTON);
         strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
@@ -175,7 +175,7 @@ void handleUserInteraction()
       break;
 
     case STRONG_MODE_ENTER_STRONGSIP:   // sipped strong, wait for release
-      if (sensorData.pressure > slotSettings.ts)
+      if (currentState.pressure > slotSettings.ts)
         waitStable++;
       else waitStable = 0;
       if (waitStable >= STRONGMODE_STABLETIME) {
@@ -190,25 +190,25 @@ void handleUserInteraction()
       break;
 
     case STRONG_MODE_STRONGSIP_ACTIVE:   // strong sip mode active
-      if (sensorData.y < -strongDirThreshold) {
+      if (currentState.y < -strongDirThreshold) {
         makeTone(TONE_EXIT_STRONGSIP, 0 );
         handlePress(STRONGSIP_UP_BUTTON); handleRelease(STRONGSIP_UP_BUTTON);
         strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
         waitStable = 0;
       }
-      else if (sensorData.x < -strongDirThreshold) {
+      else if (currentState.x < -strongDirThreshold) {
         makeTone(TONE_EXIT_STRONGSIP, 0 );
         handlePress(STRONGSIP_LEFT_BUTTON); handleRelease(STRONGSIP_LEFT_BUTTON);
         strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
         waitStable = 0;
       }
-      else if (sensorData.x > strongDirThreshold) {
+      else if (currentState.x > strongDirThreshold) {
         makeTone(TONE_EXIT_STRONGSIP, 0 );
         handlePress(STRONGSIP_RIGHT_BUTTON); handleRelease(STRONGSIP_RIGHT_BUTTON);
         strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
         waitStable = 0;
       }
-      else if (sensorData.y > strongDirThreshold) {
+      else if (currentState.y > strongDirThreshold) {
         makeTone(TONE_EXIT_STRONGSIP, 0 );
         handlePress(STRONGSIP_DOWN_BUTTON); handleRelease(STRONGSIP_DOWN_BUTTON);
         strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
@@ -245,7 +245,7 @@ void handleUserInteraction()
     //handle normal sip and puff actions
     switch (puffState)  {
       case SIP_PUFF_STATE_IDLE:
-        if (sensorData.pressure > slotSettings.tp)   // handle single puff actions
+        if (currentState.pressure > slotSettings.tp)   // handle single puff actions
         {
           makeTone(TONE_INDICATE_PUFF, 0);
           puffState = SIP_PUFF_STATE_STARTED; puffCount = 0;
@@ -266,7 +266,7 @@ void handleUserInteraction()
 
       case SIP_PUFF_STATE_PRESSED:
         if (puffCount) puffCount--;
-        if ((sensorData.pressure < slotSettings.tp) && (!puffCount)) {
+        if ((currentState.pressure < slotSettings.tp) && (!puffCount)) {
           handleRelease(PUFF_BUTTON);
           puffState = 0;
         }
@@ -274,7 +274,7 @@ void handleUserInteraction()
 
     switch (sipState)  {
       case SIP_PUFF_STATE_IDLE:
-        if (sensorData.pressure < slotSettings.ts)   // handle single sip actions
+        if (currentState.pressure < slotSettings.ts)   // handle single sip actions
         {
           makeTone(TONE_INDICATE_SIP, 0);
           sipState = SIP_PUFF_STATE_STARTED; sipCount = 0;
@@ -295,7 +295,7 @@ void handleUserInteraction()
 
       case SIP_PUFF_STATE_PRESSED:
         if (sipCount) sipCount--;
-        if ((sensorData.pressure > slotSettings.ts) && (!sipCount)) {
+        if ((currentState.pressure > slotSettings.ts) && (!sipCount)) {
           handleRelease(SIP_BUTTON);
           sipState = 0;
         }
@@ -317,26 +317,26 @@ float getAccelFactor() {
   static int xo = 0, yo = 0;
   static float accelMaxForce = 0, lastAngle = 0;
 
-  if (sensorData.force == 0) {
+  if (currentState.force == 0) {
     accelFactor = 0;
     accelMaxForce = 0;
     lastAngle = 0;
   }
   else {
-    if (sensorData.force > accelMaxForce) accelMaxForce = sensorData.force;
-    if (sensorData.force > accelMaxForce * 0.8f) {
+    if (currentState.force > accelMaxForce) accelMaxForce = currentState.force;
+    if (currentState.force > accelMaxForce * 0.8f) {
       if (accelFactor < 1.0f)
         accelFactor += ((float)slotSettings.ac / 5000000.0f);
     }
     else if (accelMaxForce > 0) accelMaxForce *= 0.99f;
 
-    if (sensorData.force < accelMaxForce * 0.6f)  accelFactor *= 0.995f;
-    if (sensorData.force < accelMaxForce * 0.4f)  accelFactor *= 0.99f;
+    if (currentState.force < accelMaxForce * 0.6f)  accelFactor *= 0.995f;
+    if (currentState.force < accelMaxForce * 0.4f)  accelFactor *= 0.99f;
 
-    float dampingFactor = fabsf(sensorData.x - xo) + fabsf(sensorData.y - yo);
+    float dampingFactor = fabsf(currentState.x - xo) + fabsf(currentState.y - yo);
     accelFactor *= (1.0f - dampingFactor / 1000.0f);
-    lastAngle = sensorData.angle;
-    xo = sensorData.x; yo = sensorData.y;
+    lastAngle = currentState.angle;
+    xo = currentState.x; yo = currentState.y;
   }
   (void)lastAngle; //avoid compiler warnings on unused variable. TODO: necessary value?
   return(accelFactor);
@@ -355,12 +355,12 @@ void acceleratedMouseMove(float accelFactor) {
 
   if (getForceSensorType() != FORCE_FABI_GENERIC)
   {
-    moveValX = sensorData.x * (float)slotSettings.ax * accelFactor;
-    moveValY = sensorData.y * (float)slotSettings.ay * accelFactor;
+    moveValX = currentState.x * (float)slotSettings.ax * accelFactor;
+    moveValY = currentState.y * (float)slotSettings.ay * accelFactor;
   }
   else {
-    moveValX = sensorData.xRaw * (float)slotSettings.ax / 50;
-    moveValY = sensorData.yRaw * (float)slotSettings.ay / 50;
+    moveValX = currentState.xRaw * (float)slotSettings.ax / 50;
+    moveValY = currentState.yRaw * (float)slotSettings.ay / 50;
   }
 
   float actSpeed =  sqrtf (moveValX * moveValX + moveValY * moveValY);
@@ -410,48 +410,48 @@ void handleMovement()
     int moveX=0, moveY=0;
     
     // handle accelerated mouse cursor movement induced by button actions
-    if (sensorData.autoMoveX == 0) {
-      sensorData.autoMoveXTimestamp = 0;
+    if (currentState.autoMoveX == 0) {
+      currentState.autoMoveXTimestamp = 0;
     } else {
-      if (sensorData.autoMoveXTimestamp == 0) 
-        sensorData.autoMoveXTimestamp = millis();
+      if (currentState.autoMoveXTimestamp == 0) 
+        currentState.autoMoveXTimestamp = millis();
       else {
-        float f= (float)(millis() - sensorData.autoMoveXTimestamp) / (float)MOUSE_AUTOMOVE_ACCELERATION_TIME;
+        float f= (float)(millis() - currentState.autoMoveXTimestamp) / (float)MOUSE_AUTOMOVE_ACCELERATION_TIME;
         if (f > 1.0f) f = 1.0f;
-        moveX=sensorData.autoMoveX * f;
+        moveX=currentState.autoMoveX * f;
       }
     }
-    if (sensorData.autoMoveY == 0) {
-      sensorData.autoMoveYTimestamp = 0;
+    if (currentState.autoMoveY == 0) {
+      currentState.autoMoveYTimestamp = 0;
     } else {
-      if (sensorData.autoMoveYTimestamp == 0) 
-        sensorData.autoMoveYTimestamp = millis();
+      if (currentState.autoMoveYTimestamp == 0) 
+        currentState.autoMoveYTimestamp = millis();
       else {
-        float f= (float)(millis() - sensorData.autoMoveYTimestamp) / (float)MOUSE_AUTOMOVE_ACCELERATION_TIME;
+        float f= (float)(millis() - currentState.autoMoveYTimestamp) / (float)MOUSE_AUTOMOVE_ACCELERATION_TIME;
         if (f > 1.0f) f = 1.0f;
-        moveY=sensorData.autoMoveY * f;
+        moveY=currentState.autoMoveY * f;
       }
     }
     if ((moveX != 0) || (moveY != 0))  mouseMove(moveX, moveY);  // perform mouse movement
   NB_DELAY_END
 
-  if (globalSettings.thresholdAutoDwell && sensorData.mouseMoveTimestamp) {
-    if (millis() - sensorData.mouseMoveTimestamp >= globalSettings.thresholdAutoDwell) {
+  if (globalSettings.thresholdAutoDwell && currentState.mouseMoveTimestamp) {
+    if (millis() - currentState.mouseMoveTimestamp >= globalSettings.thresholdAutoDwell) {
       #ifdef DEBUG_OUTPUT
           Serial.println("Autodwell Click");
       #endif
       mousePress(MOUSE_LEFT);
-      sensorData.clickReleaseTimestamp = millis() + DEFAULT_CLICK_TIME;
-      sensorData.mouseMoveTimestamp = 0;
+      currentState.clickReleaseTimestamp = millis() + DEFAULT_CLICK_TIME;
+      currentState.mouseMoveTimestamp = 0;
     }
   }
-  if ((sensorData.clickReleaseTimestamp) && (millis() > sensorData.clickReleaseTimestamp)) {
+  if ((currentState.clickReleaseTimestamp) && (millis() > currentState.clickReleaseTimestamp)) {
     mouseRelease(MOUSE_LEFT);
-    sensorData.clickReleaseTimestamp = 0;
+    currentState.clickReleaseTimestamp = 0;
   }
 
   #ifdef RP2350
-    if (sensorData.x || sensorData.y) {   // if there is any movement
+    if (currentState.x || currentState.y) {   // if there is any movement
       userActivity(); // keep system from going into dormant mode (see lpwFuncs.h)
     }
   #endif
@@ -463,30 +463,30 @@ void handleMovement()
       break; 
      
     case STICKMODE_ALTERNATIVE:  // handle alternative actions stick mode
-      handleButton(UP_BUTTON,  sensorData.y < 0 ? 1 : 0);
-      handleButton(DOWN_BUTTON,  sensorData.y > 0 ? 1 : 0);
-      handleButton(LEFT_BUTTON,  sensorData.x < 0 ? 1 : 0);
-      handleButton(RIGHT_BUTTON,  sensorData.x > 0 ? 1 : 0);
+      handleButton(UP_BUTTON,  currentState.y < 0 ? 1 : 0);
+      handleButton(DOWN_BUTTON,  currentState.y > 0 ? 1 : 0);
+      handleButton(LEFT_BUTTON,  currentState.x < 0 ? 1 : 0);
+      handleButton(RIGHT_BUTTON,  currentState.x > 0 ? 1 : 0);
       break;
       
     case STICKMODE_JOYSTICK_1:
       { NB_DELAY_START(gamepadAxis, GAMEPAD_MINIMUM_SEND_INTERVAL)
-        joystickAxis(0,scaleJoystickAxis((float)sensorData.x * slotSettings.ax));
-        joystickAxis(1,scaleJoystickAxis((float)sensorData.y * slotSettings.ay));
+        joystickAxis(0,scaleJoystickAxis((float)currentState.x * slotSettings.ax));
+        joystickAxis(1,scaleJoystickAxis((float)currentState.y * slotSettings.ay));
       NB_DELAY_END }
       break;
 
     case STICKMODE_JOYSTICK_2:
       { NB_DELAY_START(gamepadAxis, GAMEPAD_MINIMUM_SEND_INTERVAL)
-        joystickAxis(2,scaleJoystickAxis((float)sensorData.x * slotSettings.ax));
-        joystickAxis(3,scaleJoystickAxis((float)sensorData.y * slotSettings.ay));
+        joystickAxis(2,scaleJoystickAxis((float)currentState.x * slotSettings.ax));
+        joystickAxis(3,scaleJoystickAxis((float)currentState.y * slotSettings.ay));
       NB_DELAY_END }
       break;
 
     case STICKMODE_JOYSTICK_3:
       { NB_DELAY_START(gamepadAxis, GAMEPAD_MINIMUM_SEND_INTERVAL)
-        joystickAxis(4,scaleJoystickAxis((float)sensorData.x * slotSettings.ax));
-        joystickAxis(5,scaleJoystickAxis((float)sensorData.y * slotSettings.ay));
+        joystickAxis(4,scaleJoystickAxis((float)currentState.x * slotSettings.ax));
+        joystickAxis(5,scaleJoystickAxis((float)currentState.y * slotSettings.ay));
       NB_DELAY_END }
       break;
   }

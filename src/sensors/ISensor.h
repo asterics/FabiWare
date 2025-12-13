@@ -35,9 +35,9 @@ public:
   virtual void calibrate() {} // optional: sensor-specific calibration
 };
 
-class IButtonSource {
+class IButtonSensor {
 public:
-  virtual ~IButtonSource() {}
+  virtual ~IButtonSensor() {}
   virtual bool init() = 0;
   virtual ButtonSample readButtons() = 0;
 };

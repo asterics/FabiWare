@@ -22,7 +22,7 @@ typedef struct {
 
 
 
-class FabiGenericI2C : public IForceSensor, public IPressureSensor, public IButtonSource {
+class FabiGenericI2C : public IForceSensor, public IPressureSensor, public IButtonSensor {
 public:
   bool init() override;
   // IForceSensor

@@ -85,7 +85,7 @@ void mouseMove(int x, int y)
     dragRecordingY+=y;
   }
 
-  if (x || y) sensorData.mouseMoveTimestamp=millis();
+  if (x || y) currentState.mouseMoveTimestamp=millis();
 
   //as long as one of the axis is out of bounds of int8 (more than one HID report)
   while(x < -128 || x > 127 || y < -128 || y > 127 ) {

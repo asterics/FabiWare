@@ -98,7 +98,7 @@ struct GlobalSettings globalSettings {
   .thresholdMultiPress=0,    // threshold time for button multi-press (0=disabled)
 };
 
-struct SensorData sensorData {        
+struct CurrentState currentState {        
   .x=0, .y=0, .xRaw=0, .yRaw=0, .pressure=0, 
   .deadZone=0, .force=0, .forceRaw=0, .angle=0,
   .dir=0,
@@ -110,21 +110,13 @@ struct SensorData sensorData {
   .currentBattPercent = -1, .MCPSTAT = 0,
   .usbConnected = false,
   .buttonStates = 0, .oldButtonStates = 0,
-  .I2CButtonStates = 0, .oldI2CButtonStates = 0
+  .I2CButtonStates = 0, .oldI2CButtonStates = 0,
+  .actSlot = 0, .useI2CasGPIO = false,
+  .goingToSleep = 0   
 };
 
 struct SlotSettings slotSettings;             // contains all slot settings
 uint8_t workingmem[WORKINGMEM_SIZE];          // working memory (command parser, IR-rec/play)
-uint8_t actSlot = 0;                          // number of current slot
-bool useI2CasGPIO = false;                     // if set, we will use the SDA/SCL lines of Wire1 as GPIOs, set when INTERNAL_ADC is used and no I2C devices detected on startup.
-uint8_t goingToSleep = 0;                    // flag to indicate that the device is going to sleep mode
-
-/*
-  Handling I2C devices for check if something changed (will reset device, e.g. if external sensors are connected)
- */
-uint8_t devicesWire[8] = {0};                 // active I2C devices on Wire, see supported_devices[]
-uint8_t devicesWire1[8] = {0};                 // active I2C devices on Wire1, see supported_devices[]
-int testI2Cdevices(TwoWire *interface, uint8_t *device_list);
 
 /**
    @name setup
@@ -162,7 +154,7 @@ void setup() {
 
   Wire.begin();
   //check the I2C bus for active devices, add to array
-  testI2Cdevices(&Wire,devicesWire);
+  testI2Cdevices(&Wire);
 
   // initialize Serial interface
   Serial.begin(115200);
@@ -240,25 +232,25 @@ void loop() {
   NB_DELAY_START(interaction, UPDATE_INTERVAL)
     // get current sensor data from core1
     mutex_enter_blocking(&(currentSensorDataCore1.sensorDataMutex));
-    sensorData.xRaw=currentSensorDataCore1.xRaw;
-    sensorData.yRaw=currentSensorDataCore1.yRaw;
-    sensorData.pressure=currentSensorDataCore1.pressure;
-    sensorData.I2CButtonStates=currentSensorDataCore1.I2CButtonStates;
+    currentState.xRaw=currentSensorDataCore1.xRaw;
+    currentState.yRaw=currentSensorDataCore1.yRaw;
+    currentState.pressure=currentSensorDataCore1.pressure;
+    currentState.I2CButtonStates=currentSensorDataCore1.I2CButtonStates;
     mutex_exit(&(currentSensorDataCore1.sensorDataMutex));
 
     // apply rotation if needed
     switch (slotSettings.ro) {
       int32_t tmp;
-      case 90: tmp=sensorData.xRaw;sensorData.xRaw=-sensorData.yRaw;sensorData.yRaw=tmp;
+      case 90: tmp=currentState.xRaw;currentState.xRaw=-currentState.yRaw;currentState.yRaw=tmp;
               break;
-      case 180: sensorData.xRaw=-sensorData.xRaw;sensorData.yRaw=-sensorData.yRaw;
+      case 180: currentState.xRaw=-currentState.xRaw;currentState.yRaw=-currentState.yRaw;
                 break;
-      case 270: tmp=sensorData.xRaw;sensorData.xRaw=sensorData.yRaw;sensorData.yRaw=-tmp;
+      case 270: tmp=currentState.xRaw;currentState.xRaw=currentState.yRaw;currentState.yRaw=-tmp;
                 break;
     }
 
-    calculateDirection(&sensorData);            // calculate angular direction / force form x/y sensor data
-    applyDeadzone(&sensorData, &slotSettings);  // calculate updated x/y/force values according to deadzone
+    calculateDirection(&currentState);            // calculate angular direction / force form x/y sensor data
+    applyDeadzone(&currentState, &slotSettings);  // calculate updated x/y/force values according to deadzone
     handleUserInteraction();                    // handle all mouse / joystick / button activities
 
     reportValues();   // send live data to serial
@@ -271,24 +263,14 @@ void loop() {
     NB_DELAY_START(batteryUpdate,BATTERY_UPDATE_INTERVAL)
       performBatteryManagement();
       //Update Battery level for BLE, use 99% if not valid (-1)
-      if(sensorData.currentBattPercent > 0) MouseBLE.setBattery(sensorData.currentBattPercent);
+      if(currentState.currentBattPercent > 0) MouseBLE.setBattery(currentState.currentBattPercent);
       else MouseBLE.setBattery(99);
     NB_DELAY_END
   #endif
 
-  #ifdef FABI   // every 1s: check for changed I2C devices. TBD: for FABI only?
+  #ifdef FABI   // every 1s: check for changed I2C devices (FABI only)
     NB_DELAY_START(i2cscan,1000)
-      //create a copy of list before checking again
-      uint8_t olddevices[8];
-      memcpy(olddevices,devicesWire,8);      
-      //check again
-      testI2Cdevices(&Wire,devicesWire);
-      //check if they match, if not -> restart
-      if(memcmp(olddevices,devicesWire,8) != 0) {
-        Serial.println("Devices on Wire changed -> restarting!");
-        watchdog_reboot(0, 0, 10);
-        while (1) { continue; }
-      }
+      testI2Cdevices(&Wire, true);  // reset if something changed
     NB_DELAY_END
   #endif
 
@@ -324,7 +306,7 @@ void setup1() {
   Wire1.setClock(400000);  // use 400kHz I2C clock
 
   //check the I2C bus for active devices, add to array
-  i2cDevices = testI2Cdevices(&Wire1,devicesWire1);
+  i2cDevices = testI2Cdevices(&Wire1);
 
   #ifdef DEBUG_DELAY_STARTUP
     delay(3000);  // allow some time for serial interface to come up
@@ -334,18 +316,6 @@ void setup1() {
   if (getForceSensorType()==FORCE_NAU7802)
     setSensorBoard(slotSettings.sb); // apply sensorboard settings
 
-  #ifndef FLIPMOUSE
-  //using external joystick via INTERNAL_ADC and no I2C devices: use pins as GPIO.
-  if(getForceSensorType() == FORCE_INTERNAL_ADC  && i2cDevices == 0) {
-    useI2CasGPIO = true;
-    //Serial.println("I2C->GPIO");
-    Wire1.end();
-    pinMode(PIN_WIRE1_SDA_,INPUT_PULLUP);
-    pinMode(PIN_WIRE1_SCL_,INPUT_PULLUP);
-  }
-  #endif
-
-  // initBlink(10,20);  // first signs of life!
 }
 
 /**
@@ -355,7 +325,7 @@ void setup1() {
 */
 void loop1() {
  
-  if (goingToSleep) {
+  if (currentState.goingToSleep) {
     delay(10);
     return; // if going to sleep, skip sensor updates
   }
@@ -364,12 +334,9 @@ void loop1() {
   if (rp2040.fifo.available()) {
       setSensorBoard(rp2040.fifo.pop());  
   }
-
-  if (getForceSensorType() != FORCE_NONE)
-     readForce();    
-
-  if (getPressureSensorType() != PRESSURE_NONE)
-     readPressure();    
+  readForce();      // update force sensor data
+  readPressure();   // update pressure sensor data 
+  readButtons();    // update button sensor data (form generic I2C button board if available)
 
   checkSensorCalibration();  // perform sensor calibration if necessary
 
@@ -384,55 +351,15 @@ void loop1() {
     static int cnt=0;   
     if (!(cnt++%200)) digitalWrite(LED_BUILTIN,!digitalRead(LED_BUILTIN));
   #endif
-  // every 1s: check for changed I2C devices. TBD: for FABI only?
-  #ifndef FLIPMOUSE
+  // every 1s: check for changed I2C devices (FABI only)
+  #ifdef FABI
   NB_DELAY_START(i2cscan, 1000)
     //check only if we are NOT using SDA/SCL as GPIOs...
-    if(!useI2CasGPIO) {
-      //create a copy of list before checking again
-      uint8_t olddevices[8];
-      memcpy(olddevices, devicesWire1, 8);
-      //check again
-      testI2Cdevices(&Wire1, devicesWire1);
-      //check if they match, if not -> restart
-      if (memcmp(olddevices, devicesWire1, 8) != 0)
-      {
-        Serial.println("Devices on Wire1 changed -> restarting!");
-        watchdog_reboot(0, 0, 10);
-        while (1)
-        {
-          continue;
-        }
-      }
+    if(!currentState.useI2CasGPIO) {
+      testI2Cdevices(&Wire1, true);  // reset if something changed
     }
   NB_DELAY_END
   #endif
 
   delay(1); // core1: sleep a bit ...  
-}
-
-int testI2Cdevices(TwoWire *interface, uint8_t *device_list) {
-  int devicenr = 0;     //currently used I2C address index of supported_devices[]
-  int devicecount = 0;  //count of found devices, used as offset in active devices (devicesWire[])
-
-  //reset device list
-  memset(device_list,0,8);
-
-  while(supported_devices[devicenr] != 0x00) { //test until address is 0x00
-    interface->beginTransmission(supported_devices[devicenr]);
-    uint8_t result = interface->endTransmission();
-    //if found: add to array of active devices
-    if (result == 0) {
-      #ifdef DEBUG_OUTPUT_I2C_SCAN
-        DEBUG_OUT.print("Found device @0x");
-        DEBUG_OUT.println(supported_devices[devicenr],HEX);
-      #endif
-      device_list[devicecount] = supported_devices[devicenr];
-      devicecount++;
-    }
-    //next address to be tested
-    devicenr++;
-  }
-
-  return devicecount;
 }

@@ -4,8 +4,6 @@
 // Access global loadcell filters defined in sensors.cpp
 extern LoadcellSensor XS;
 extern LoadcellSensor YS;
-extern uint8_t reportXValues;
-extern uint8_t reportYValues;
 
 Adafruit_NAU7802 nau;
 
@@ -24,7 +22,8 @@ bool ForceNAU7802::init() {
   }
 
   pinMode(drdy_, INPUT);
-  // Move NAU configuration from sensors.cpp
+
+  // apply configuration 
   nau.setLDO(NAU7802_3V0);
   nau.setGain(NAU7802_GAIN_128);
   nau.setRate(NAU7802_RATE_320SPS);
@@ -150,13 +149,6 @@ void setSensorBoard(int sensorBoardID)
       XS.setIdleDetectionThreshold(350);  YS.setIdleDetectionThreshold(500);
       XS.setAutoCalibrationMode(AUTOCALIBRATION_ADAPT_THRESHOLD); 
       YS.setAutoCalibrationMode(AUTOCALIBRATION_ADAPT_THRESHOLD);
-      break;
-    //  signal reporting settings
-    case SENSORBOARD_REPORT_X:
-      reportXValues = !reportXValues;
-      break;
-    case SENSORBOARD_REPORT_Y:
-      reportYValues = !reportYValues;
       break;
   }
 }

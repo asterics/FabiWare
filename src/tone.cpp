@@ -103,7 +103,7 @@ void prepSoundFilename(char * extendedFn, char *fn) {
     strcpy(extendedFn,SOUND_FOLDER);
     strcat(extendedFn,fn);
   }
-  else sprintf(extendedFn,"%sslot%d",SOUND_FOLDER,actSlot);
+  else sprintf(extendedFn,"%sslot%d",SOUND_FOLDER,currentState.actSlot);
 }
 
 /**

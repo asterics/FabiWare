@@ -28,6 +28,8 @@
 #define SENSOR_WATCHDOG_TIMEOUT    3000   // watchdog reset time (no NAU sensor data for x millsec. resets device)
 #define PRESSURE_MAX_SAMPLINGRATE   100   // maximum sampling frequency of pressure sensors
 #define FORCE_MAX_SAMPLINGRATE      100   // maximum sampling frequency of force sensors
+#define BUTTONS_MAX_SAMPLINGRATE    100   // maximum sampling frequency of button sensors
+
 
 /**** detection threshold for floating ADC pin */
 #define PINFLOAT_DIFFERENCE_THRESHOLD 500
@@ -121,20 +123,27 @@ void readPressure();
 */
 void readForce();
 
+/**
+   @name readButtons
+   @brief read current button sensor states
+   @return none
+*/
+void readButtons();
+
 
 /**
    @name calculateDirection
    @brief calculates angular direction and force for current x/y sensor values
    @return none
 */
-void calculateDirection(struct SensorData * sensorData);
+void calculateDirection(struct CurrentState * sensorData);
 
 /**
    @name applyDeadzone
    @brief applies deadzone algorithm (elliptical or rectangular) to raw x/y sensor data
    @return none
 */
-void applyDeadzone(struct SensorData * sensorData, struct SlotSettings * slotSettings);
+void applyDeadzone(struct CurrentState * sensorData, struct SlotSettings * slotSettings);
 
 /**
    @name setSensorBoard
@@ -151,5 +160,13 @@ void setSensorBoard(int sensorBoardID);
 */
 uint8_t checkSensorWatchdog();
 
+/**
+   @name testI2CDevices
+   @brief checks if I2C devices are present on the given interface and fills the device_list array accordingly
+   @param interface: TwoWire interface to check (Wire or Wire1)
+   @param resetIfChanged: if true, a reset will be performed if a change in the device list is detected
+   @return number of detected devices
+*/
+int testI2Cdevices(TwoWire *interface, bool resetIfChanged = false);
 
 #endif /* _SENSORS_H_ */

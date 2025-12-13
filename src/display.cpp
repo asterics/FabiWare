@@ -179,14 +179,14 @@ void batteryDisplay(bool refresh){
 
   #ifdef RP2350   // low power / battery support only available for RP2350
 
-  switch(sensorData.MCPSTAT){
+  switch(currentState.MCPSTAT){
     case MCPSTAT_LOW: 
-      if (sensorData.usbConnected) iconState=(iconState+1)%4;
-      else iconState=sensorData.currentBattPercent/33;
+      if (currentState.usbConnected) iconState=(iconState+1)%4;
+      else iconState=currentState.currentBattPercent/33;
       break;
     case MCPSTAT_HIGH:
-      if (sensorData.usbConnected) iconState=4;
-      else iconState=sensorData.currentBattPercent/33;
+      if (currentState.usbConnected) iconState=4;
+      else iconState=currentState.currentBattPercent/33;
       break;
     default:
       iconState=-1;    

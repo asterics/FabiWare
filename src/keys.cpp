@@ -170,8 +170,8 @@ void release_all()  // releases all previously pressed keys and stop mouse actio
   mouseRelease(MOUSE_LEFT);
   mouseRelease(MOUSE_MIDDLE);
   mouseRelease(MOUSE_RIGHT);
-  sensorData.autoMoveX = 0;
-  sensorData.autoMoveY = 0;
+  currentState.autoMoveX = 0;
+  currentState.autoMoveY = 0;
 }
 
 /**
