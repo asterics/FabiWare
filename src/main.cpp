@@ -146,6 +146,9 @@ void setup() {
 
   #ifdef FLIPMOUSE  // if using Arduino Nano 2040 Connect: initialise BT module  (must be done early!)
     initBluetooth();
+    //enable 3v3 for sensors
+    pinMode(LDO_ENABLE_PIN,OUTPUT);
+    digitalWrite(LDO_ENABLE_PIN, true);
   #endif
 
   #ifdef RP2350    // low power / battery support only available for RP2350
@@ -316,10 +319,8 @@ void setup1() {
   #endif
   
   // enable Wire1 I2C interface (used by Core1 for sensors)
-  #ifndef FLIPMOUSE
-    Wire1.setSDA(PIN_WIRE1_SDA_);
-    Wire1.setSCL(PIN_WIRE1_SCL_);
-  #endif
+  Wire1.setSDA(PIN_WIRE1_SDA_);
+  Wire1.setSCL(PIN_WIRE1_SCL_);
   Wire1.begin();
   Wire1.setClock(400000);  // use 400kHz I2C clock
 

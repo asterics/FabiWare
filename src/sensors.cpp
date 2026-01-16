@@ -223,24 +223,35 @@ void initSensors()
           Serial.println("SEN: cannot find generic FABI I2C sensor.");
       #endif
 
-      // check if an analog x/y sensor (e.g. a joystick module) is connected to the internal ADC
-      if ((!isAnalogPinFloating(ANALOG_FORCE_SENSOR_X_PIN)) && (!isAnalogPinFloating(ANALOG_FORCE_SENSOR_Y_PIN))) {
+      #ifndef FLIPMOUSE
+        // check if an analog x/y sensor (e.g. a joystick module) is connected to the internal ADC
+        // only for FABI
+        if ((!isAnalogPinFloating(ANALOG_FORCE_SENSOR_X_PIN)) && (!isAnalogPinFloating(ANALOG_FORCE_SENSOR_Y_PIN))) {
+          #ifdef DEBUG_OUTPUT_SENSORS
+            Serial.println("SEN: Force sensor connected to internal ADC");
+          #endif
+          currentSensorDataCore1.forceSensorType = FORCE_INTERNAL_ADC;
+          #ifndef FLIPMOUSE
+            // in case the FABI3 PCB is used, we cannot use internal ADC0 for force and pressure ...
+            if (currentSensorDataCore1.pressureSensorType == PRESSURE_INTERNAL_ADC) { 
+              currentSensorDataCore1.pressureSensorType = PRESSURE_NONE;
+            }
+          #endif
+        }
+        else {
         #ifdef DEBUG_OUTPUT_SENSORS
-          Serial.println("SEN: Force sensor connected to internal ADC");
+          Serial.println("SEN: no force sensor connected");
+        #endif     
+        }
+      #else
+        //the internal ADC pins conflict with I2C:
+        // if a pressure sensor is active, and no force sensor:
+        // the mouse goes crazy because we are using SDA&SCL as X/Y.
+        currentSensorDataCore1.forceSensorType = FORCE_NONE;
+        #ifdef DEBUG_OUTPUT_SENSORS
+          Serial.println("SEN: no force sensor connected");
         #endif
-        currentSensorDataCore1.forceSensorType = FORCE_INTERNAL_ADC;
-        #ifndef FLIPMOUSE
-          // in case the FABI3 PCB is used, we cannot use internal ADC0 for force and pressure ...
-          if (currentSensorDataCore1.pressureSensorType == PRESSURE_INTERNAL_ADC) { 
-            currentSensorDataCore1.pressureSensorType = PRESSURE_NONE;
-          }
-        #endif
-      }
-      else {
-      #ifdef DEBUG_OUTPUT_SENSORS
-        Serial.println("SEN: no force sensor connected");
-      #endif     
-      } 
+      #endif
     }
   }
 }
