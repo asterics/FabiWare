@@ -15,6 +15,7 @@ def after_build(source, target, env):
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
         dst = os.path.join(out_dir, f"{env_name}.uf2")
+        os.remove(dst) #copy won't overwrite
         shutil.copyfile(src, dst)
         print(f"Copied {src} to {dst}")
     else:

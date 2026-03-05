@@ -171,6 +171,8 @@ void setup() {
   Serial.begin(115200);
   #ifdef DEBUG_DELAY_STARTUP
     delay(3000);  // allow some time for serial interface to come up
+  #else
+    delay(500); // no long delay, but we need some delay to startup the sensors
   #endif
 
   // load default slot settings
@@ -329,6 +331,8 @@ void setup1() {
 
   #ifdef DEBUG_DELAY_STARTUP
     delay(3000);  // allow some time for serial interface to come up
+  #else
+    delay(500); // no long delay, but we need some delay to startup the sensors
   #endif
 
   initSensors();
