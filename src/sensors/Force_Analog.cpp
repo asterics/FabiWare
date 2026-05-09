@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 bool ForceAnalog::init() {
-  if ((!isAnalogPinFloating(ANALOG_FORCE_SENSOR_X_PIN)) && (!isAnalogPinFloating(ANALOG_FORCE_SENSOR_Y_PIN))) {
+  if ((!isAnalogPinFloating(xPin)) && (!isAnalogPinFloating(yPin))) {
     #ifdef DEBUG_OUTPUT_SENSORS
       Serial.println("SEN: Force sensor connected to internal ADC");
     #endif
