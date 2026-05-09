@@ -430,13 +430,21 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
       slotSettings.ss = par1;
       break;
     case CMD_SB:
-      if (slotSettings.sb != par1) {
-        slotSettings.sb = par1;
-        startSensorCalibration();  // initiate calibration for new sensorboard profile!
-        initBlink(10, 20);
-        makeTone(TONE_CALIB, 0);
-        rp2040.fifo.push_nb(par1); // tell the other core to switch sensorboard profile
+      if ((par1 >= 0) && (par1 <= 7)) {
+        if (slotSettings.sb != par1) {
+          slotSettings.sb = par1;
+          startSensorCalibration();  // initiate calibration for new sensorboard profile!
+          initBlink(10, 20);
+          makeTone(TONE_CALIB, 0);
+          rp2040.fifo.push_nb(par1); // tell the other core to switch sensorboard profile
+        }
       }
+#ifdef DEBUG_OUTPUT_FULL
+      else {
+        DEBUG_OUT.print("invalid sensorboard profile ignored: ");
+        DEBUG_OUT.println(par1);
+      }
+#endif
       break;
     case CMD_SC:
 #ifdef DEBUG_OUTPUT_FULL
