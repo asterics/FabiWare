@@ -204,7 +204,7 @@ void readButtons()
 /**
    @name calculateDirection
    @brief calculates angular direction and force for current x/y sensor values. [called from core 0]
-   @param sensorData: pointer to SensorData struct, used by core0
+   @param currentState: pointer to CurrentState struct, used by core0
    @return none
 */
 void calculateDirection(struct CurrentState * currentState)
@@ -221,8 +221,8 @@ void calculateDirection(struct CurrentState * currentState)
 
 /**
    @name applyDeadzone
-   @brief calculates deadzone and respective x/y/force values (in sensorData struct). [called from core 0]
-   @param sensorData: pointer to SensorData struct, used by core0
+   @brief calculates deadzone and respective x/y/force values (in CurrentState struct). [called from core 0]
+   @param currentState: pointer to CurrentState struct, used by core0
    @param slotSettings: pointer to SlotSettings struct, used by core0
    @return none
 */
