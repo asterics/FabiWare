@@ -55,22 +55,28 @@ bool ForceNAU7802::init() {
 }
 
 ForceSample ForceNAU7802::readForce() {
+  static int32_t actX = 0, actY = 0;
+  static int32_t xChange = 0, yChange = 0;
   ForceSample s{0,0,0};
-  if (digitalRead(drdy_) == HIGH && nau.available()) {
-    int32_t val = nau.read();
+  if (digitalRead(drdy_) == HIGH) { // && nau.available()) {
     if (channel_ == 0) {
-      // reading channel 1 (X)
+      // reading channel 0 (X)
+      xChange = (XS.process(nau.read()) - actX) / 2;
       YS.lockBaseline(XS.isMoving());
-      if (val) s.xRaw = val / NAU_DIVIDER;
-      nau.setChannel(NAU7802_CHANNEL2);
+      actX += xChange;
+      actY += yChange;
       channel_ = 1;
     } else {
-      // reading channel 2 (Y)
+      // reading channel 1 (Y)
+      yChange = (YS.process(nau.read()) - actY) / 2;
       XS.lockBaseline(YS.isMoving());
-      if (val) s.yRaw = val / NAU_DIVIDER;
-      nau.setChannel(NAU7802_CHANNEL1);
+      actX += xChange;
+      actY += yChange;
       channel_ = 0;
     }
+    nau.setChannel(channel_ == 0 ? NAU7802_CHANNEL1 : NAU7802_CHANNEL2);
+    s.xRaw = actX / NAU_DIVIDER;
+    s.yRaw = actY / NAU_DIVIDER;
     s.hasData = 1;
   }
   return s;
