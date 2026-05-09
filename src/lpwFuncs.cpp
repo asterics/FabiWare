@@ -36,17 +36,17 @@ unsigned long inactivityTime=0;  // measures user inactivity (in ms)
  *         false : USB Disconnected (VBUS Presence not detected)
  */
 bool detectUSB(){
-  sensorData.usbConnected = cyw43_arch_gpio_get(CYW43_WL_GPIO_VBUS_PIN);
-  static bool prevValue = !sensorData.usbConnected;
+  currentState.usbConnected = cyw43_arch_gpio_get(CYW43_WL_GPIO_VBUS_PIN);
+  static bool prevValue = !currentState.usbConnected;
   
-  if (prevValue != sensorData.usbConnected){
+  if (prevValue != currentState.usbConnected){
     #ifdef DEBUG_BATTERY_MANAGEMENT
-     if (sensorData.usbConnected) Serial.println("USB Connected");
+     if (currentState.usbConnected) Serial.println("USB Connected");
      else Serial.println("USB Disconnected");  // note that this only makes sense if Serial connected still present!
     #endif
-    prevValue = sensorData.usbConnected;
+    prevValue = currentState.usbConnected;
   }
-  return sensorData.usbConnected;
+  return currentState.usbConnected;
 }
 
 /**
@@ -100,7 +100,7 @@ uint8_t batteryPresenceDetector(){
     break;
   }
 
-  sensorData.MCPSTAT=state;
+  currentState.MCPSTAT=state;
   return state;
 }
 
@@ -112,7 +112,7 @@ uint8_t batteryPresenceDetector(){
  */
 int8_t getBatteryPercentage(){
   static int battSum=0, battReadCounter=0, result=0;
-  if(sensorData.MCPSTAT == MCPSTAT_HIGHZ) return (-1);
+  if(currentState.MCPSTAT == MCPSTAT_HIGHZ) return (-1);
   battReadCounter++;
   battSum += readPercentage();
   if (battReadCounter >= BATTERY_AVERAGING ){ 
@@ -140,15 +140,15 @@ uint16_t readPercentage() {
 void performBatteryManagement()  {
   detectUSB();
   batteryPresenceDetector();
-  sensorData.currentBattPercent = getBatteryPercentage();
+  currentState.currentBattPercent = getBatteryPercentage();
   batteryDisplay();
   #ifdef DEBUG_BATTERY_MANAGEMENT
-    Serial.println("Battery level="+String(sensorData.currentBattPercent));
+    Serial.println("Battery level="+String(currentState.currentBattPercent));
   #endif
 
   // check user inactivity, possibly initiate power save mode
 
-  if (!sensorData.usbConnected || DEBUG_SLEEP_WITH_USB) {
+  if (!currentState.usbConnected || DEBUG_SLEEP_WITH_USB) {
     inactivityTime += BATTERY_UPDATE_INTERVAL;
     if (inactivityTime >= (inactivityTimeMinutes*60000 + inactivityTimeSeconds*1000))
       inactivityHandler();  // time to go to sleep...
@@ -257,7 +257,7 @@ void dormantUntilInterrupt(int8_t *wake_interrupt_gpios, int8_t amt_gpios) {
  */
 void inactivityHandler() {
   inactivityTime=0;
-  goingToSleep=1;   // inform core1 loop that we are going to sleep
+  currentState.goingToSleep=1;   // inform core1 loop that we are going to sleep
   saveLastActiveSlotNumber(); 
   displayMessage((char*)"ByeBye");
   delay(2000);   // time for the user to read the message

@@ -21,26 +21,15 @@
 #include "Wire.h"            // MPRLS pressure sensor and NAU7802 sensor use I2C
 #include <hardware/adc.h>    // for directly reading the internal ADC
 #include <LoadcellSensor.h>  // for signal conditioning
-#include <Adafruit_NAU7802.h>  //NAU7802 library (Benjamin Aigner's fork with channel change feature)
 
-/**** MPRLS related signal shaping parameters */
-#define MPRLS_DIVIDER 2                 // divider for the MPRLS raw value.
-#define MEDIAN_VALUES 5                 // number of values used for median-based spike filter (for MPRLS sensor)
-#define SPIKE_DETECTION_THRESHOLD 1000  // distance from median value which classifies a spike
-
-/**** DPS310 related signal shaping parameters */
-#define DPS_SCALEFACTOR  -20            // scale factor for aligning DPS with MPRLS raw values
-#define DPS_DIVIDER  3                  // divider for the DPS310 values
-#define DPS_SPIKE_DETECTION_THRESHOLD 150  // distance from median value which classifies a spike
-#define DPS_MEDIAN_VALUES 5                // number of values used for median-based spike filter (for MPRLS sensor)
-
-/**** NAU7802 related signal shaping parameters */
-#define NAU_DIVIDER 120               // divider for the NAU raw values
+// sensor-specific parameters moved into their respective module headers
 
 /**** general sensor related settings */
 #define SENSOR_WATCHDOG_TIMEOUT    3000   // watchdog reset time (no NAU sensor data for x millsec. resets device)
 #define PRESSURE_MAX_SAMPLINGRATE   100   // maximum sampling frequency of pressure sensors
 #define FORCE_MAX_SAMPLINGRATE      100   // maximum sampling frequency of force sensors
+#define BUTTONS_MAX_SAMPLINGRATE    100   // maximum sampling frequency of button sensors
+
 
 /**** detection threshold for floating ADC pin */
 #define PINFLOAT_DIFFERENCE_THRESHOLD 500
@@ -79,38 +68,10 @@ struct CurrentSensorDataCore1 {
 
 extern struct CurrentSensorDataCore1 currentSensorDataCore1;
 
-
-// data structure for FABI I2C transmission
-
-#define FABI_I2C_CMD_GET_CAPS     0xFF    // command to request device capabilities bitmask
-
-#define FABI_I2C_CAP_XY        (1<<0)  // bitmask for 1st data field in FABI generic sensor I2C report: int16_t x / int16_t y  (4 bytes)
-#define FABI_I2C_CAP_PRESSURE  (1<<1)  // bitmask for 3rd data field in FABI generic sensor I2C report: int16_t pressure       (2 bytes)
-#define FABI_I2C_CAP_BUTTONS   (1<<2)  // bitmask for 4th data field in FABI generic sensor I2C report: uint16_t buttons       (2 bytes)
-  
-
-typedef struct {
-  uint8_t reportType;      // first byte contains flags (bitmask) for transferred data fields
-  int16_t x;
-  int16_t y;
-  uint16_t pressure;
-  uint16_t button_states;
-} i2c_fabi_data_t;
-
-
-/**
-   @brief Sensorboard IDs for different signal processing parameters
-*/
-#define SENSORBOARD_SG_HIGH      0
-#define SENSORBOARD_SG_MEDIUM    1
-#define SENSORBOARD_SG_LOW       2
-#define SENSORBOARD_SG_VERY_LOW  3
-#define SENSORBOARD_SMD_HIGH     4
-#define SENSORBOARD_SMD_MEDIUM   5
-#define SENSORBOARD_SMD_LOW      6
-#define SENSORBOARD_SMD_VERY_LOW 7
-#define SENSORBOARD_REPORT_X    10   // enable / disable signal processing values reporting for X axis
-#define SENSORBOARD_REPORT_Y    11   // enable / disable signal processing values reporting for Y axis
+// expose global signal processors for NAU (X/Y) and pressure (PS)
+extern LoadcellSensor XS;
+extern LoadcellSensor YS;
+extern LoadcellSensor PS;
 
 /**
    @name initSensors
@@ -162,20 +123,27 @@ void readPressure();
 */
 void readForce();
 
+/**
+   @name readButtons
+   @brief read current button sensor states
+   @return none
+*/
+void readButtons();
+
 
 /**
    @name calculateDirection
    @brief calculates angular direction and force for current x/y sensor values
    @return none
 */
-void calculateDirection(struct SensorData * sensorData);
+void calculateDirection(struct CurrentState * sensorData);
 
 /**
    @name applyDeadzone
    @brief applies deadzone algorithm (elliptical or rectangular) to raw x/y sensor data
    @return none
 */
-void applyDeadzone(struct SensorData * sensorData, struct SlotSettings * slotSettings);
+void applyDeadzone(struct CurrentState * sensorData, struct SlotSettings * slotSettings);
 
 /**
    @name setSensorBoard
@@ -192,43 +160,13 @@ void setSensorBoard(int sensorBoardID);
 */
 uint8_t checkSensorWatchdog();
 
-
 /**
-   @name getMPRLSValue
-   @brief called periodically in order to read out MPRLS pressure data
-          expected sampling rate ca. 100 Hz
-   @param newVal: pointer where result will be stored
-   @return status byte of MPRLS
+   @name testI2CDevices
+   @brief checks if I2C devices are present on the given interface and fills the device_list array accordingly
+   @param interface: TwoWire interface to check (Wire or Wire1)
+   @param resetIfChanged: if true, a reset will be performed if a change in the device list is detected
+   @return number of detected devices
 */
-int getMPRLSValue(int32_t * newVal);
-
-/**
-   @name getNAUValues
-   @brief called if new data from NAU7802 is available.
-          reads NAU data, changes NAU channel and reads MPRLS data
-          expected sampling rate ca. 30 Hz per channel (-> 60 Hz interpolated)
-   @param actX, actY: pointers where results will be stored
-   @return status byte of MPRLS
-*/
-void getNAUValues(int32_t * actX, int32_t * actY);
-
-
-/**
-   @name calculateMedian
-   @brief calculates median value (attention: uses static buffer, useable for just 1 signal!)
-   @param value: next sample
-   @return median value
-*/
-int calculateMedian(int value);
-
-
-/**
-   @name isAnalogPinFloating
-   @brief performs a check if an ADC pin is floating or a sensor is connected
-   @return true if the ADC pin is floating, false otherwise
-*/
-int isAnalogPinFloating (int pin);
-
-
+int testI2Cdevices(TwoWire *interface, bool resetIfChanged = false);
 
 #endif /* _SENSORS_H_ */

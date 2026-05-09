@@ -33,8 +33,6 @@ Adafruit_NeoPixel pixels(1, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
    extern declaration of static variables
    which shall be accessed from other modules
 */
-extern uint8_t actSlot;
-
 void initGPIO() 
 {
   for (int i = 0; i < NUMBER_OF_PHYSICAL_BUTTONS; i++) { // initialize physical buttons and bouncers
@@ -62,7 +60,7 @@ void updateLeds()
   uint8_t g = 0;
   uint8_t b = 0;
   static uint32_t oldValue=0;
-  uint8_t colCode=actSlot+1;
+  uint8_t colCode=currentState.actSlot+1;
   static uint16_t fadeCount=0;
 
 	if (blinkCount == 0) {         // normal mode / not blinking

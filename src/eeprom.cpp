@@ -144,11 +144,11 @@ uint8_t readFromEEPROM(char const * slotname)
     //either load next slot or first slot.
     #ifdef DEBUG_OUTPUT_MEMORY
 			DEBUG_OUT.print("Load next:");
-			if(actSlot == getLastSlotIndex()) DEBUG_OUT.println("0");
-			else DEBUG_OUT.println(actSlot + 1);
+			if(currentState.actSlot == getLastSlotIndex()) DEBUG_OUT.println("0");
+			else DEBUG_OUT.println(currentState.actSlot + 1);
 		#endif
-    if(actSlot == getLastSlotIndex()) return readFromEEPROMSlotNumber(0, true);
-    else return readFromEEPROMSlotNumber(actSlot + 1, true);
+    if(currentState.actSlot == getLastSlotIndex()) return readFromEEPROMSlotNumber(0, true);
+    else return readFromEEPROMSlotNumber(currentState.actSlot + 1, true);
   }
 
   int8_t nr = slotnameToNumber(slotname);
@@ -206,10 +206,10 @@ uint8_t readFromEEPROMSlotNumber(uint8_t nr, bool playTone)
   }
 
   // finished, now this slot is active!
-  actSlot = nr;
-  if (playTone) makeTone(TONE_CHANGESLOT, actSlot);
+  currentState.actSlot = nr;
+  if (playTone) makeTone(TONE_CHANGESLOT, currentState.actSlot);
   #ifdef DEBUG_OUTPUT_MEMORY
-    DEBUG_OUT.print("actSlot: "); DEBUG_OUT.println(actSlot);
+    DEBUG_OUT.print("actSlot: "); DEBUG_OUT.println(currentState.actSlot);
   #endif
   return(1);
 }
@@ -231,7 +231,7 @@ uint8_t saveLastActiveSlotNumber()
   if(!f) return 0;
 
   // write current active slot number
-  f.print(actSlot);
+  f.print(currentState.actSlot);
   f.close();
   return (1);
 } 

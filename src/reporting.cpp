@@ -130,30 +130,30 @@ void reportValues()
 
   // update / override sip and puff button states for reporting
   if(getPressureSensorType() != PRESSURE_NONE) {
-    if (sensorData.pressure < slotSettings.ts) buttonStates |= (1<<SIP_BUTTON);
+    if (currentState.pressure < slotSettings.ts) buttonStates |= (1<<SIP_BUTTON);
     else buttonStates &= ~(1<<SIP_BUTTON);
-    if (sensorData.pressure < slotSettings.ss) buttonStates |= (1<<STRONGSIP_BUTTON);
+    if (currentState.pressure < slotSettings.ss) buttonStates |= (1<<STRONGSIP_BUTTON);
     else buttonStates &= ~(1<<STRONGSIP_BUTTON);
-    if (sensorData.pressure > slotSettings.tp) buttonStates |= (1<<PUFF_BUTTON);
+    if (currentState.pressure > slotSettings.tp) buttonStates |= (1<<PUFF_BUTTON);
     else buttonStates &= ~(1<<PUFF_BUTTON);  
-    if (sensorData.pressure > slotSettings.sp) buttonStates |= (1<<STRONGPUFF_BUTTON);
+    if (currentState.pressure > slotSettings.sp) buttonStates |= (1<<STRONGPUFF_BUTTON);
     else buttonStates &= ~(1<<STRONGPUFF_BUTTON);
   }
 
   if (valueReportCount++ > 50/UPDATE_INTERVAL) {      // report raw values approx. every 50ms !
-    int32_t u=sensorData.yRaw+512; int32_t d=512-sensorData.yRaw;   // just for GUI compatibility with V2 (bar displays up/down)
-    int32_t l=sensorData.xRaw+512; int32_t r=512-sensorData.xRaw;   // just for GUI compatibility with V2 (bar displays left/right)
-    Serial.print("VALUES:"); Serial.print(sensorData.pressure); Serial.print(",");
+    int32_t u=currentState.yRaw+512; int32_t d=512-currentState.yRaw;   // just for GUI compatibility with V2 (bar displays up/down)
+    int32_t l=currentState.xRaw+512; int32_t r=512-currentState.xRaw;   // just for GUI compatibility with V2 (bar displays left/right)
+    Serial.print("VALUES:"); Serial.print(currentState.pressure); Serial.print(",");
     Serial.print(u); Serial.print(","); Serial.print(d); Serial.print(",");
     Serial.print(l); Serial.print(","); Serial.print(r); Serial.print(",");
-    Serial.print(sensorData.xRaw); Serial.print(","); Serial.print(sensorData.yRaw); Serial.print(",");
+    Serial.print(currentState.xRaw); Serial.print(","); Serial.print(currentState.yRaw); Serial.print(",");
     for (uint8_t i = 0; i < NUMBER_OF_BUTTONS; i++)
     {
       if (buttonStates & (1 << i)) Serial.print("1");
       else Serial.print("0");
     }
     Serial.print(",");
-    Serial.print(actSlot);
+    Serial.print(currentState.actSlot);
     Serial.println("");
     valueReportCount = 0;
   }
