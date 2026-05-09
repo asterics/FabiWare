@@ -23,7 +23,7 @@
 #define _FabiWare_H_
 
 // Important: update the version string with every important firmware change!
-#define VERSION_STRING "v3.7.1"
+#define VERSION_STRING "v3.7.2"
 
 // Note: Set the target device (FLIPMOUSE, FABI or FLIPPAD) in platformio.ini (e.g. -DFABI)!
 //       Also, BLE Joystick support for FABI can be configured in platformio.ini
@@ -74,8 +74,8 @@
 //#define DEBUG_OUTPUT_SENSORS 	 // enable sensors.cpp debugging, showing whats happening on sensor reading & init
 //#define DEBUG_DELAY_STARTUP 	 // enable a 3s delay after Serial.begin and before all the other stuff.
 //#define DEBUG_OUTPUT_I2C_SCAN  // enable output of detected I2C devices on scanning
-#define DEBUG_ACTIVITY_LED 	   // enable blinking internal led signaling activity (in sensor loop, core1).
-#define DEBUG_SLEEP_WITH_USB false  /* if true, we will send the Pico to sleep even with USB connected */
+//#define DEBUG_ACTIVITY_LED 	   // enable blinking internal led signaling activity (in sensor loop, core1).
+//#define DEBUG_SLEEP_WITH_USB false  /* if true, we will send the Pico to sleep even with USB connected */
 //#define DEBUG_PRESSURE_RAWVALUES // raw output of pressure values and filtered output
 //#define DEBUG_MPRLS_ERRORFLAGS // continously print error flags of MPRLS
 //#define DEBUG_BATTERY_MANAGEMENT 	 // enable a debug output for battery state detection and management.

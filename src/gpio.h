@@ -31,7 +31,10 @@
   #define TONE_PIN       25   // physical pin for piezo buzzer
   #define IR_LED_PIN     19   //  IR-Led output pin for FlipMouse
   #define DRDY_PIN       21   // Data ready pin of NAU chip for FlipMouse
+  #define PIN_WIRE1_SDA_ 26
+  #define PIN_WIRE1_SCL_ 27
   #define ANALOG_PRESSURE_SENSOR_PIN A3   // input pin if an analog pressure sensor is used with FlipMouse3 PCB 
+
 #else 
   #define NUMBER_OF_PHYSICAL_BUTTONS 5      // number of physical switches for FABI/FlipPad
   #define PHYSICAL_BUTTON_MAP {11,9,8,4,3}
