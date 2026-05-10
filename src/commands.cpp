@@ -87,6 +87,54 @@ const struct atCommandType atCommands[] PROGMEM = {
 const char ERRORMESSAGE_NOT_FOUND[] = "E: not found";
 const char ERRORMESSAGE_EEPROM_FULL[] = "E: eeprom full";
 
+static bool parseTriggerTerm(char *term, struct TriggerTerm *out)
+{
+  if (!term || !*term || !out) return false;
+
+  char *open = strchr(term, '(');
+  char *close = open ? strchr(open + 1, ')') : nullptr;
+  if (!open || !close || close[1] != 0) return false;
+
+  *open = 0;
+  *close = 0;
+
+  uint8_t trigType = 0xFF;
+  if      (strcasecmp(term, "single") == 0) trigType = TRIGGER_TYPE_SINGLE;
+  else if (strcasecmp(term, "long")   == 0) trigType = TRIGGER_TYPE_LONG;
+  else if (strcasecmp(term, "double") == 0) trigType = TRIGGER_TYPE_DOUBLE;
+  else if (strcasecmp(term, "triple") == 0) trigType = TRIGGER_TYPE_TRIPLE;
+  else return false;
+
+  int8_t btnIdx = parseButtonName(open + 1);
+  if (btnIdx < 0 || !isTriggerSupportedButton((uint8_t)btnIdx)) return false;
+
+  out->triggerType = trigType;
+  out->buttonIndex = (uint8_t)btnIdx;
+  return true;
+}
+
+static bool parseTriggerExpression(char *expr, struct TriggerTerm *terms, uint8_t *termCount)
+{
+  if (!expr || !*expr || !terms || !termCount) return false;
+
+  *termCount = 0;
+  char *p = expr;
+  while (p && *p) {
+    if (*termCount >= MAX_TRIGGER_TERMS) return false;
+
+    char *plus = strchr(p, '+');
+    if (plus) *plus = 0;
+
+    if (!parseTriggerTerm(p, &terms[*termCount])) return false;
+    (*termCount)++;
+
+    if (!plus) break;
+    p = plus + 1;
+  }
+
+  return (*termCount > 0);
+}
+
 
 /**
    @name performCommand (called from parser.cpp)
@@ -100,15 +148,16 @@ const char ERRORMESSAGE_EEPROM_FULL[] = "E: eeprom full";
 void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodicMouseMovement)
 {
   static uint8_t actButton = 0;        // button number for AT BM assignment (1-based; 0 = inactive)
-  static uint8_t actTriggerButton = 0; // button number for AT TG assignment (1-based; 0 = inactive)
-  static uint8_t actTriggerType   = 0; // trigger type for AT TG assignment
+  static struct TriggerTerm pendingTriggerTerms[MAX_TRIGGER_TERMS];
+  static uint8_t pendingTriggerTermCount = 0;
 
   // If the previous command was AT TG <spec>: store the current command as trigger action.
-  if (actTriggerButton != 0) {
-    addOrReplaceTrigger(actTriggerButton - 1, actTriggerType,
-                        cmd, par1, keystring ? keystring : "");
-    actTriggerButton = 0;
-    actTriggerType   = 0;
+  if (pendingTriggerTermCount != 0) {
+    if (addOrReplaceTriggerSequence(pendingTriggerTerms, pendingTriggerTermCount,
+                                    cmd, par1, keystring ? keystring : "") < 0) {
+      Serial.println("?");
+    }
+    pendingTriggerTermCount = 0;
     return;
   }
 
@@ -250,25 +299,15 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
         break;
       }
 
-      // AT TG long(<btn>)  /  double(<btn>)  /  triple(<btn>)
-      uint8_t trigType = 0;
-      char   *p        = nullptr;
-      if      (strncasecmp(keystring, "long(",   5) == 0) { trigType = TRIGGER_TYPE_LONG;   p = keystring + 5; }
-      else if (strncasecmp(keystring, "double(", 7) == 0) { trigType = TRIGGER_TYPE_DOUBLE; p = keystring + 7; }
-      else if (strncasecmp(keystring, "triple(", 7) == 0) { trigType = TRIGGER_TYPE_TRIPLE; p = keystring + 7; }
-
-      if (trigType && p) {
-        char *end = strchr(p, ')');
-        if (end) {
-          *end = 0;
-          int8_t btnIdx = parseButtonName(p);
-          if (btnIdx >= 0 && isTriggerSupportedButton((uint8_t)btnIdx)) {
-            actTriggerButton = (uint8_t)(btnIdx + 1);  // 1-based
-            actTriggerType   = trigType;
-          } else {
-            Serial.println("?");
-          }
+      // AT TG <expr> where <expr> = term [+ term ...]
+      // term = single(<btn>) | long(<btn>) | double(<btn>) | triple(<btn>)
+      struct TriggerTerm parsedTerms[MAX_TRIGGER_TERMS];
+      uint8_t parsedCount = 0;
+      if (parseTriggerExpression(keystring, parsedTerms, &parsedCount)) {
+        for (uint8_t i = 0; i < parsedCount; i++) {
+          pendingTriggerTerms[i] = parsedTerms[i];
         }
+        pendingTriggerTermCount = parsedCount;
       } else {
         Serial.println("?");
       }

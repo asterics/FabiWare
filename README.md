@@ -109,6 +109,60 @@ Hold-style normal actions (`KH`, `HL/HR/HM`, `PL/PR/PM`, joystick hold-style act
 - If a long/double/triple trigger takes over, active hold state is released before the trigger action runs
 - Deferred hold actions are never left sticky; release is always enforced when transitioning between actions
 
+## Composite Trigger Sequences
+
+You can chain multiple button presses together to create complex gesture sequences. Use the `+` operator to combine terms:
+
+```
+AT TG term1+term2+term3...
+```
+
+### Syntax
+
+Each term specifies a button and gesture type:
+
+- `single(buttonName)` - single press
+- `double(buttonName)` - two presses within the multi-press window
+- `triple(buttonName)` - three presses within the multi-press window
+- `long(buttonName)` - hold the button until the long-press timeout
+
+### Timing Rules
+
+The multi-press window (`AT MP`) applies **between consecutive button releases**:
+
+- After you release a button with its gesture complete, you have `AT MP` milliseconds to start the next button press
+- **Exception**: `long()` events are not subject to the MP timeout (they fire after a hold, then the next sequence term can begin)
+- The window is measured from when you release the previous button, not from when the gesture was recognized
+
+### Examples
+
+```
+# Double-press B1, then single-press sip (within 400ms of releasing B1)
+AT MP 400
+AT TG double(B1)+single(sip)
+AT KP KEY_A
+
+# Double-press B1, then double-press sip (each gap within 400ms)
+AT MP 400
+AT TG double(B1)+double(sip)
+AT CL
+
+# Double-press B1, then hold B3 for 1500ms
+AT MP 400
+AT LP 1500
+AT TG double(B1)+long(B3)
+AT KP KEY_ENTER
+
+# Single up, double right, single sip (complex sequence)
+AT MP 400
+AT TG single(up)+double(right)+single(sip)
+AT CR
+```
+
+### Supported button combinations
+
+Any button name supported by `AT TG` can appear in a composite sequence. Combined direction buttons (`ssup`, `spdown`, etc.) remain excluded from triggers.
+
 ## Supported Button Names for `AT TG`
 
 You can assign triggers to:

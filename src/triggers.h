@@ -47,20 +47,27 @@
 #include <Arduino.h>
 
 // Trigger type identifiers
+#define TRIGGER_TYPE_SINGLE  0  // single press
 #define TRIGGER_TYPE_LONG    1  // long press
 #define TRIGGER_TYPE_DOUBLE  2  // double press
 #define TRIGGER_TYPE_TRIPLE  3  // triple press
 
 #define MAX_TRIGGER_COUNT              10   // maximum triggers per slot
 #define MAX_TRIGGER_KEYSTRING_BUFFER  150   // shared keystring storage (bytes)
+#define MAX_TRIGGER_TERMS               4   // maximum terms per trigger expression
+
+struct TriggerTerm {
+   uint8_t triggerType;
+   uint8_t buttonIndex;
+};
 
 /**
    TriggerEntry struct
    Associates a (button, trigger-type) pair with an action command.
 */
 struct TriggerEntry {
-  uint8_t  buttonIndex;  // 0-based index into buttons[]; 0xFF = unused slot
-  uint8_t  triggerType;  // TRIGGER_TYPE_*
+   uint8_t  termCount;    // 0 = unused slot
+   struct TriggerTerm terms[MAX_TRIGGER_TERMS];
   uint16_t mode;         // action: CMD_* identifier
   int16_t  value;        // numeric parameter for the action
 };
@@ -95,6 +102,19 @@ int8_t findTrigger(uint8_t buttonIndex, uint8_t triggerType);
 */
 int8_t addOrReplaceTrigger(uint8_t buttonIndex, uint8_t triggerType,
                            uint16_t mode, int16_t value, const char *keystring);
+
+/**
+   @name addOrReplaceTriggerSequence
+   @brief Store or overwrite a trigger entry with 1..MAX_TRIGGER_TERMS terms.
+   @param terms      array of trigger terms
+   @param termCount  number of terms in the array
+   @param mode       action command (CMD_*)
+   @param value      numeric parameter
+   @param keystring  string parameter (may be empty)
+   @return index of the entry, or -1 on error / table full
+*/
+int8_t addOrReplaceTriggerSequence(const struct TriggerTerm *terms, uint8_t termCount,
+                                   uint16_t mode, int16_t value, const char *keystring);
 
 /**
    @name clearTriggers
@@ -148,6 +168,20 @@ const char *buttonIndexName(uint8_t idx);
    @return "long", "double", or "triple"
 */
 const char *triggerTypeName(uint8_t type);
+
+/**
+   @name hasTriggerTerm
+   @brief Check if any trigger entry contains the given (button, triggerType) term.
+   @return true if such a term exists
+*/
+bool hasTriggerTerm(uint8_t buttonIndex, uint8_t triggerType);
+
+/**
+   @name hasCompositeTriggerTerm
+   @brief Check whether a term appears in any trigger with more than one term.
+   @return true if a composite trigger contains this term
+*/
+bool hasCompositeTriggerTerm(uint8_t buttonIndex, uint8_t triggerType);
 
 /**
    @name isTriggerSupportedButton

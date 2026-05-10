@@ -25,12 +25,264 @@ char * buttonKeystrings[NUMBER_OF_BUTTONS];              // pointers to keystrin
 char keystringBuffer[MAX_KEYSTRINGBUFFER_LEN]={0};       // storage for keystring parameters for all buttons
 struct buttonDebouncerType buttonDebouncers [NUMBER_OF_BUTTONS];   // array for all buttonsDebouncers - type definition see fabi.h
 uint32_t buttonStates = 0;  // current button states for reporting raw values (AT SR)
+static uint8_t  sequenceProgress[MAX_TRIGGER_COUNT];
+static uint32_t sequenceLastEvent[MAX_TRIGGER_COUNT];
+static uint8_t  sequenceTermPressCount[MAX_TRIGGER_COUNT];
+static uint32_t sequenceTermPressTime[MAX_TRIGGER_COUNT];
+static uint8_t  normalActionStarted[NUMBER_OF_BUTTONS];
+static uint8_t  pendingDoubleEventEmitted[NUMBER_OF_BUTTONS];
+
+static void releaseButtonHoldAction(int buttonIndex);
+
+#ifdef DEBUG_OUTPUT_FULL
+static void debugPrintTriggerTerm(const struct TriggerTerm *term)
+{
+  DEBUG_OUT.print(triggerTypeName(term->triggerType));
+  DEBUG_OUT.print("(");
+  DEBUG_OUT.print(buttonIndexName(term->buttonIndex));
+  DEBUG_OUT.print(")");
+}
+#endif
 
 static void executeTriggerAction(int8_t trigIdx)
 {
   if (trigIdx < 0) return;
   performCommand(triggerEntries[trigIdx].mode, triggerEntries[trigIdx].value,
                  getTriggerKeystring(trigIdx), 1);
+}
+
+static void releaseSequenceHoldActions(int8_t trigIdx)
+{
+  if (trigIdx < 0 || trigIdx >= MAX_TRIGGER_COUNT) return;
+  for (uint8_t i = 0; i < triggerEntries[trigIdx].termCount; i++) {
+    releaseButtonHoldAction(triggerEntries[trigIdx].terms[i].buttonIndex);
+  }
+}
+
+static bool emitTriggerEvent(uint8_t buttonIndex, uint8_t triggerType, uint32_t eventTimestamp)
+{
+  uint32_t now = eventTimestamp;
+  bool anyCompleted = false;
+
+#ifdef DEBUG_OUTPUT_FULL
+  DEBUG_OUT.print("TG EVT: ");
+  DEBUG_OUT.print(triggerTypeName(triggerType));
+  DEBUG_OUT.print("(");
+  DEBUG_OUT.print(buttonIndexName(buttonIndex));
+  DEBUG_OUT.print(") t=");
+  DEBUG_OUT.println(now);
+#endif
+
+  for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
+    if (triggerEntries[i].termCount < 2) {
+      sequenceProgress[i] = 0;
+      sequenceTermPressCount[i] = 0;
+      continue;
+    }
+
+    if (globalSettings.thresholdMultiPress == 0) {
+      sequenceProgress[i] = 0;
+      sequenceTermPressCount[i] = 0;
+      continue;
+    }
+
+    if (sequenceProgress[i] > 0 &&
+        triggerEntries[i].terms[sequenceProgress[i]].triggerType != TRIGGER_TYPE_LONG &&
+        (uint32_t)(now - sequenceLastEvent[i]) > globalSettings.thresholdMultiPress) {
+#ifdef DEBUG_OUTPUT_FULL
+      DEBUG_OUT.print("TG SEQ reset(timeout): #");
+      DEBUG_OUT.print(i);
+      DEBUG_OUT.print(" gap=");
+      DEBUG_OUT.print((uint32_t)(now - sequenceLastEvent[i]));
+      DEBUG_OUT.print(" mp=");
+      DEBUG_OUT.println(globalSettings.thresholdMultiPress);
+#endif
+      sequenceProgress[i] = 0;
+      sequenceTermPressCount[i] = 0;
+    }
+
+    uint8_t p = sequenceProgress[i];
+    if (p >= triggerEntries[i].termCount) p = 0;
+
+    bool matchesNext = false;
+    if (p < triggerEntries[i].termCount) {
+      matchesNext = (triggerEntries[i].terms[p].buttonIndex == buttonIndex &&
+                     triggerEntries[i].terms[p].triggerType == triggerType);
+    }
+
+    if (matchesNext) {
+#ifdef DEBUG_OUTPUT_FULL
+      DEBUG_OUT.print("TG SEQ match: #");
+      DEBUG_OUT.print(i);
+      DEBUG_OUT.print(" step=");
+      DEBUG_OUT.print(p);
+      DEBUG_OUT.print(" term=");
+      debugPrintTriggerTerm(&triggerEntries[i].terms[p]);
+      DEBUG_OUT.println("");
+#endif
+      p++;
+      sequenceProgress[i] = p;
+      sequenceLastEvent[i] = now;
+      sequenceTermPressCount[i] = 0;
+      if (p >= triggerEntries[i].termCount) {
+#ifdef DEBUG_OUTPUT_FULL
+        DEBUG_OUT.print("TG SEQ complete: #");
+        DEBUG_OUT.println(i);
+#endif
+        releaseSequenceHoldActions((int8_t)i);
+        executeTriggerAction((int8_t)i);
+        sequenceProgress[i] = 0;
+        sequenceTermPressCount[i] = 0;
+        anyCompleted = true;
+      }
+      continue;
+    }
+
+    if (triggerEntries[i].terms[0].buttonIndex == buttonIndex &&
+        triggerEntries[i].terms[0].triggerType == triggerType) {
+#ifdef DEBUG_OUTPUT_FULL
+      DEBUG_OUT.print("TG SEQ start: #");
+      DEBUG_OUT.print(i);
+      DEBUG_OUT.print(" term=");
+      debugPrintTriggerTerm(&triggerEntries[i].terms[0]);
+      DEBUG_OUT.println("");
+#endif
+      sequenceProgress[i] = 1;
+      sequenceLastEvent[i] = now;
+      sequenceTermPressCount[i] = 0;
+    } else {
+      sequenceProgress[i] = 0;
+      sequenceTermPressCount[i] = 0;
+    }
+  }
+
+  return anyCompleted;
+}
+
+static void processSequencePressEvent(uint8_t buttonIndex, uint32_t now)
+{
+  if (globalSettings.thresholdMultiPress == 0) return;
+
+#ifdef DEBUG_OUTPUT_FULL
+  DEBUG_OUT.print("TG PRESS EVT: ");
+  DEBUG_OUT.print(buttonIndexName(buttonIndex));
+  DEBUG_OUT.print(" t=");
+  DEBUG_OUT.println(now);
+#endif
+
+  for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
+    if (triggerEntries[i].termCount < 2) continue;
+    if (sequenceProgress[i] == 0 || sequenceProgress[i] >= triggerEntries[i].termCount) continue;
+
+    uint32_t timeoutBaseline = (sequenceTermPressCount[i] > 0) ? sequenceTermPressTime[i] : sequenceLastEvent[i];
+    if ((uint32_t)(now - timeoutBaseline) > globalSettings.thresholdMultiPress) {
+    #ifdef DEBUG_OUTPUT_FULL
+      DEBUG_OUT.print("TG PRESS reset(timeout): #");
+      DEBUG_OUT.print(i);
+      DEBUG_OUT.print(" gap=");
+      DEBUG_OUT.print((uint32_t)(now - timeoutBaseline));
+      DEBUG_OUT.print(" mp=");
+      DEBUG_OUT.println(globalSettings.thresholdMultiPress);
+    #endif
+      sequenceProgress[i] = 0;
+      sequenceTermPressCount[i] = 0;
+      continue;
+    }
+
+    struct TriggerTerm expected = triggerEntries[i].terms[sequenceProgress[i]];
+    if (expected.buttonIndex != buttonIndex) continue;
+    if (expected.triggerType != TRIGGER_TYPE_DOUBLE && expected.triggerType != TRIGGER_TYPE_TRIPLE) {
+      // Expected button pressed but it's single/long — refresh timeout from this press
+      // so subsequent presses don't incorrectly expire the window
+      sequenceTermPressCount[i] = 0;
+      sequenceLastEvent[i] = now;
+      continue;
+    }
+
+    uint8_t neededPresses = (expected.triggerType == TRIGGER_TYPE_DOUBLE) ? 2 : 3;
+    if (sequenceTermPressCount[i] == 0) {
+#ifdef DEBUG_OUTPUT_FULL
+      DEBUG_OUT.print("TG PRESS latch-start: #");
+      DEBUG_OUT.print(i);
+      DEBUG_OUT.print(" expect=");
+      debugPrintTriggerTerm(&expected);
+      DEBUG_OUT.println("");
+#endif
+      sequenceTermPressCount[i] = 1;
+      sequenceTermPressTime[i] = now;
+      continue;
+    }
+
+    if ((uint32_t)(now - sequenceTermPressTime[i]) <= globalSettings.thresholdMultiPress) {
+      sequenceTermPressCount[i]++;
+#ifdef DEBUG_OUTPUT_FULL
+      DEBUG_OUT.print("TG PRESS latch-advance: #");
+      DEBUG_OUT.print(i);
+      DEBUG_OUT.print(" count=");
+      DEBUG_OUT.print(sequenceTermPressCount[i]);
+      DEBUG_OUT.print(" need=");
+      DEBUG_OUT.print(neededPresses);
+      DEBUG_OUT.print(" gap=");
+      DEBUG_OUT.println((uint32_t)(now - sequenceTermPressTime[i]));
+#endif
+      sequenceTermPressTime[i] = now;
+      if (sequenceTermPressCount[i] >= neededPresses) {
+        uint8_t p = sequenceProgress[i] + 1;
+#ifdef DEBUG_OUTPUT_FULL
+        DEBUG_OUT.print("TG PRESS term-complete: #");
+        DEBUG_OUT.print(i);
+        DEBUG_OUT.print(" expect=");
+        debugPrintTriggerTerm(&expected);
+        DEBUG_OUT.println("");
+#endif
+        sequenceProgress[i] = p;
+        sequenceLastEvent[i] = now;
+        sequenceTermPressCount[i] = 0;
+        if (p >= triggerEntries[i].termCount) {
+#ifdef DEBUG_OUTPUT_FULL
+          DEBUG_OUT.print("TG PRESS complete: #");
+          DEBUG_OUT.println(i);
+#endif
+          releaseSequenceHoldActions((int8_t)i);
+          executeTriggerAction((int8_t)i);
+          sequenceProgress[i] = 0;
+        }
+      }
+    } else {
+#ifdef DEBUG_OUTPUT_FULL
+      DEBUG_OUT.print("TG PRESS latch-restart(timeout): #");
+      DEBUG_OUT.print(i);
+      DEBUG_OUT.print(" gap=");
+      DEBUG_OUT.print((uint32_t)(now - sequenceTermPressTime[i]));
+      DEBUG_OUT.print(" mp=");
+      DEBUG_OUT.println(globalSettings.thresholdMultiPress);
+#endif
+      sequenceTermPressCount[i] = 1;
+      sequenceTermPressTime[i] = now;
+    }
+  }
+}
+
+static bool isAwaitingCompositeSingleTerm(uint8_t buttonIndex)
+{
+  if (globalSettings.thresholdMultiPress == 0) return false;
+
+  uint32_t now = millis();
+  for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
+    if (triggerEntries[i].termCount < 2) continue;
+
+    uint8_t p = sequenceProgress[i];
+    if (p == 0 || p >= triggerEntries[i].termCount) continue;
+
+    if ((uint32_t)(now - sequenceLastEvent[i]) > globalSettings.thresholdMultiPress)
+      continue;
+
+    if (triggerEntries[i].terms[p].triggerType == TRIGGER_TYPE_SINGLE &&
+        triggerEntries[i].terms[p].buttonIndex == buttonIndex)
+      return true;
+  }
+
+  return false;
 }
 
 static void releaseButtonHoldAction(int buttonIndex)
@@ -182,13 +434,18 @@ void handlePress (int buttonIndex)   // a button was pressed
   buttonStates |= (1<<buttonIndex); //save for reporting
   buttonDebouncers[buttonIndex].longPressed = 0;   // reset long-press flag for this press
   buttonDebouncers[buttonIndex].timestamp = millis(); // start measuring hold time for long-press
+  processSequencePressEvent((uint8_t)buttonIndex, buttonDebouncers[buttonIndex].timestamp);
   // Hierarchical handling for non-hold actions:
   // if double/triple are configured, delay firing until timeout so only the
   // most specific matching action (single/double/triple) is executed.
-  int8_t trigDouble = findTrigger((uint8_t)buttonIndex, TRIGGER_TYPE_DOUBLE);
-  int8_t trigTriple = findTrigger((uint8_t)buttonIndex, TRIGGER_TYPE_TRIPLE);
+    int8_t trigDouble = findTrigger((uint8_t)buttonIndex, TRIGGER_TYPE_DOUBLE);
+    int8_t trigTriple = findTrigger((uint8_t)buttonIndex, TRIGGER_TYPE_TRIPLE);
+    bool wantsDoubleTerm = hasTriggerTerm((uint8_t)buttonIndex, TRIGGER_TYPE_DOUBLE);
+    bool wantsTripleTerm = hasTriggerTerm((uint8_t)buttonIndex, TRIGGER_TYPE_TRIPLE);
+  bool awaitingCompositeSingleTerm = isAwaitingCompositeSingleTerm((uint8_t)buttonIndex);
   if (globalSettings.thresholdMultiPress > 0 &&
-      (trigDouble >= 0 || trigTriple >= 0)) {
+      (wantsDoubleTerm || wantsTripleTerm || awaitingCompositeSingleTerm)) {
+    normalActionStarted[buttonIndex] = 0;
     uint32_t now = millis();
     if (buttonDebouncers[buttonIndex].multiPending &&
         ((uint32_t)(now - buttonDebouncers[buttonIndex].lastReleaseTime) <= globalSettings.thresholdMultiPress)) {
@@ -196,26 +453,39 @@ void handlePress (int buttonIndex)   // a button was pressed
         buttonDebouncers[buttonIndex].pressCount++;
     } else {
       buttonDebouncers[buttonIndex].pressCount = 1;
+      pendingDoubleEventEmitted[buttonIndex] = 0;
     }
     buttonDebouncers[buttonIndex].multiPending = 1;
 
     // If no more specific trigger can follow, execute immediately.
-    if (buttonDebouncers[buttonIndex].pressCount >= 3 && trigTriple >= 0) {
+    if (buttonDebouncers[buttonIndex].pressCount >= 3 && wantsTripleTerm) {
       releaseButtonHoldAction(buttonIndex);
-      executeTriggerAction(trigTriple);
+      if (trigTriple >= 0) executeTriggerAction(trigTriple);
+      (void)emitTriggerEvent((uint8_t)buttonIndex, TRIGGER_TYPE_TRIPLE, millis());
       buttonDebouncers[buttonIndex].pressCount = 0;
       buttonDebouncers[buttonIndex].multiPending = 0;
+      pendingDoubleEventEmitted[buttonIndex] = 0;
     }
-    else if (buttonDebouncers[buttonIndex].pressCount >= 2 && trigDouble >= 0 && trigTriple < 0) {
-      releaseButtonHoldAction(buttonIndex);
-      executeTriggerAction(trigDouble);
-      buttonDebouncers[buttonIndex].pressCount = 0;
-      buttonDebouncers[buttonIndex].multiPending = 0;
+    else if (buttonDebouncers[buttonIndex].pressCount >= 2 && wantsDoubleTerm) {
+      if (wantsTripleTerm) {
+        if (!pendingDoubleEventEmitted[buttonIndex]) {
+          (void)emitTriggerEvent((uint8_t)buttonIndex, TRIGGER_TYPE_DOUBLE, millis());
+          pendingDoubleEventEmitted[buttonIndex] = 1;
+        }
+      } else {
+        releaseButtonHoldAction(buttonIndex);
+        if (trigDouble >= 0) executeTriggerAction(trigDouble);
+        (void)emitTriggerEvent((uint8_t)buttonIndex, TRIGGER_TYPE_DOUBLE, millis());
+        buttonDebouncers[buttonIndex].pressCount = 0;
+        buttonDebouncers[buttonIndex].multiPending = 0;
+        pendingDoubleEventEmitted[buttonIndex] = 0;
+      }
     }
     return;
   }
 
   // No hierarchical multi-press case: execute normal action immediately.
+  normalActionStarted[buttonIndex] = 1;
   executeNormalButtonAction(buttonIndex);
 }
 
@@ -225,7 +495,50 @@ void handleRelease (int buttonIndex)    // a button was released: deal with "sti
     Serial.print("R: "); Serial.println(buttonIndex);
   #endif
   buttonStates &= ~(1<<buttonIndex); //save for reporting
-  buttonDebouncers[buttonIndex].lastReleaseTime = millis();  // for multi-press detection
+  uint32_t releaseNow = millis();
+  buttonDebouncers[buttonIndex].lastReleaseTime = releaseNow;  // for multi-press detection
+
+  // Refresh the sequence timeout baseline so the MP window is measured from
+  // the release of the preceding term's button, not from its press.
+  for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
+    if (triggerEntries[i].termCount < 2) continue;
+    if (sequenceProgress[i] == 0 || sequenceProgress[i] >= triggerEntries[i].termCount) continue;
+    if (sequenceTermPressCount[i] > 0) continue; // already latching next term, don't disturb
+    // Check if this button belongs to the preceding (already matched) term
+    uint8_t prevTermIdx = sequenceProgress[i] - 1;
+    if (triggerEntries[i].terms[prevTermIdx].buttonIndex == (uint8_t)buttonIndex) {
+      sequenceLastEvent[i] = releaseNow;
+    }
+  }
+
+  if (buttonDebouncers[buttonIndex].multiPending) {
+    bool wantsDoubleTerm = hasTriggerTerm((uint8_t)buttonIndex, TRIGGER_TYPE_DOUBLE);
+    bool wantsTripleTerm = hasTriggerTerm((uint8_t)buttonIndex, TRIGGER_TYPE_TRIPLE);
+
+    // For awaited composite single terms, resolve immediately on release.
+    if (buttonDebouncers[buttonIndex].pressCount == 1 && !wantsDoubleTerm && !wantsTripleTerm) {
+      bool completedComposite = false;
+      if (hasTriggerTerm((uint8_t)buttonIndex, TRIGGER_TYPE_SINGLE)) {
+        completedComposite = emitTriggerEvent((uint8_t)buttonIndex, TRIGGER_TYPE_SINGLE,
+                      buttonDebouncers[buttonIndex].lastReleaseTime);
+      }
+
+      if (!(completedComposite && hasCompositeTriggerTerm((uint8_t)buttonIndex, TRIGGER_TYPE_SINGLE))) {
+        executeNormalButtonAction(buttonIndex);
+      }
+
+      buttonDebouncers[buttonIndex].pressCount = 0;
+      buttonDebouncers[buttonIndex].multiPending = 0;
+      normalActionStarted[buttonIndex] = 0;
+      pendingDoubleEventEmitted[buttonIndex] = 0;
+      return;
+    }
+  }
+
+  if (!normalActionStarted[buttonIndex]) {
+    return;
+  }
+
   switch (buttons[buttonIndex].mode) {
     // release mouse actions
     case CMD_MX: currentState.autoMoveX = 0; break;
@@ -258,6 +571,16 @@ void handleRelease (int buttonIndex)    // a button was released: deal with "sti
       stop_IR_command();
       break;
   }
+
+  normalActionStarted[buttonIndex] = 0;
+
+  if (globalSettings.thresholdMultiPress > 0 &&
+      !hasTriggerTerm((uint8_t)buttonIndex, TRIGGER_TYPE_DOUBLE) &&
+      !hasTriggerTerm((uint8_t)buttonIndex, TRIGGER_TYPE_TRIPLE) &&
+      hasTriggerTerm((uint8_t)buttonIndex, TRIGGER_TYPE_SINGLE)) {
+    (void)emitTriggerEvent((uint8_t)buttonIndex, TRIGGER_TYPE_SINGLE,
+                 buttonDebouncers[buttonIndex].lastReleaseTime);
+  }
 }
 
 void processLongPressTriggers()
@@ -272,14 +595,16 @@ void processLongPressTriggers()
     uint32_t heldFor = now - buttonDebouncers[i].timestamp;
     if ((uint32_t)heldFor >= globalSettings.thresholdLongPress) {
       int8_t trigIdx = findTrigger((uint8_t)i, TRIGGER_TYPE_LONG);
+      bool wantsLongTerm = hasTriggerTerm((uint8_t)i, TRIGGER_TYPE_LONG);
       buttonDebouncers[i].longPressed = 1;            // fire at most once per press
-      if (trigIdx >= 0) {
+      if (wantsLongTerm) {
         // A long-press trigger supersedes any pending single/double/triple resolution
         // from this press sequence.
         buttonDebouncers[i].pressCount = 0;
         buttonDebouncers[i].multiPending = 0;
         releaseButtonHoldAction(i);
-        executeTriggerAction(trigIdx);
+        if (trigIdx >= 0) executeTriggerAction(trigIdx);
+        (void)emitTriggerEvent((uint8_t)i, TRIGGER_TYPE_LONG, millis());
       }
     }
   }
@@ -296,11 +621,14 @@ void processMultiPressTriggers()
     // If button is still held and no follow-up press can occur, resolve delayed
     // hold-style single action once MP timeout elapsed.
     if ((buttonStates & (1UL << i)) != 0) {
-      if (buttonDebouncers[i].pressCount == 1 && inHoldMode(i) &&
+      bool compositeSingleTerm = hasCompositeTriggerTerm((uint8_t)i, TRIGGER_TYPE_SINGLE);
+      if (buttonDebouncers[i].pressCount == 1 && inHoldMode(i) && !compositeSingleTerm &&
           ((uint32_t)(now - buttonDebouncers[i].timestamp) > globalSettings.thresholdMultiPress)) {
+        normalActionStarted[i] = 1;
         executeNormalButtonAction(i);
         buttonDebouncers[i].pressCount = 0;
         buttonDebouncers[i].multiPending = 0;
+        pendingDoubleEventEmitted[i] = 0;
       }
       continue;
     }
@@ -313,18 +641,36 @@ void processMultiPressTriggers()
 
     int8_t trigDouble = findTrigger((uint8_t)i, TRIGGER_TYPE_DOUBLE);
     int8_t trigTriple = findTrigger((uint8_t)i, TRIGGER_TYPE_TRIPLE);
+    bool wantsDoubleTerm = hasTriggerTerm((uint8_t)i, TRIGGER_TYPE_DOUBLE);
+    bool wantsTripleTerm = hasTriggerTerm((uint8_t)i, TRIGGER_TYPE_TRIPLE);
 
-    if (buttonDebouncers[i].pressCount >= 3 && trigTriple >= 0) {
+    if (buttonDebouncers[i].pressCount >= 3 && wantsTripleTerm) {
       releaseButtonHoldAction(i);
-      executeTriggerAction(trigTriple);
+      if (trigTriple >= 0) executeTriggerAction(trigTriple);
+      (void)emitTriggerEvent((uint8_t)i, TRIGGER_TYPE_TRIPLE, millis());
+      pendingDoubleEventEmitted[i] = 0;
     }
-    else if (buttonDebouncers[i].pressCount >= 2 && trigDouble >= 0) {
+    else if (buttonDebouncers[i].pressCount >= 2 && wantsDoubleTerm) {
       releaseButtonHoldAction(i);
-      executeTriggerAction(trigDouble);
+      if (trigDouble >= 0) executeTriggerAction(trigDouble);
+      if (!pendingDoubleEventEmitted[i]) {
+        (void)emitTriggerEvent((uint8_t)i, TRIGGER_TYPE_DOUBLE, millis());
+      }
+      pendingDoubleEventEmitted[i] = 0;
     }
     else if (buttonDebouncers[i].pressCount >= 1) {
-      // fall back to the normal single action after timeout
-      executeNormalButtonAction(i);
+      bool completedComposite = false;
+      if (hasTriggerTerm((uint8_t)i, TRIGGER_TYPE_SINGLE)) {
+        completedComposite = emitTriggerEvent((uint8_t)i, TRIGGER_TYPE_SINGLE,
+                      buttonDebouncers[i].lastReleaseTime);
+      }
+      // fall back to the normal single action after timeout, unless the single
+      // event completed a composite chain that should supersede this action.
+      if (!(completedComposite && hasCompositeTriggerTerm((uint8_t)i, TRIGGER_TYPE_SINGLE))) {
+        executeNormalButtonAction(i);
+      }
+      normalActionStarted[i] = 0;
+      pendingDoubleEventEmitted[i] = 0;
     }
 
     buttonDebouncers[i].pressCount = 0;
@@ -421,5 +767,13 @@ void initDebouncers()
     buttonDebouncers[i].pressCount    = 0;
     buttonDebouncers[i].lastReleaseTime = 0;
     buttonDebouncers[i].multiPending  = 0;
+    normalActionStarted[i] = 0;
+    pendingDoubleEventEmitted[i] = 0;
+  }
+  for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
+    sequenceProgress[i] = 0;
+    sequenceLastEvent[i] = 0;
+    sequenceTermPressCount[i] = 0;
+    sequenceTermPressTime[i] = 0;
   }
 }

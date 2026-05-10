@@ -32,7 +32,7 @@ static void rebuildKeystringBuffer()
   tmp[0] = 0;
 
   for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
-    if (triggerEntries[i].buttonIndex != 0xFF) {
+    if (triggerEntries[i].termCount > 0) {
       const char *ks = triggerKeystrings[i];
       uint16_t len = (ks && *ks) ? strlen(ks) : 0;
       if (pos + len + 1 < MAX_TRIGGER_KEYSTRING_BUFFER) {
@@ -61,8 +61,8 @@ static void rebuildKeystringBuffer()
 void initTriggers()
 {
   for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
-    triggerEntries[i].buttonIndex = 0xFF;
-    triggerEntries[i].triggerType = 0;
+    triggerEntries[i].termCount = 0;
+    memset(triggerEntries[i].terms, 0, sizeof(triggerEntries[i].terms));
     triggerEntries[i].mode        = 0;
     triggerEntries[i].value       = 0;
   }
@@ -77,51 +77,91 @@ int8_t findTrigger(uint8_t buttonIndex, uint8_t triggerType)
   if (!isTriggerSupportedButton(buttonIndex)) return -1;
 
   for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
-    if (triggerEntries[i].buttonIndex == buttonIndex &&
-        triggerEntries[i].triggerType == triggerType)
+    if (triggerEntries[i].termCount == 1 &&
+        triggerEntries[i].terms[0].buttonIndex == buttonIndex &&
+        triggerEntries[i].terms[0].triggerType == triggerType)
       return (int8_t)i;
   }
   return -1;
 }
 
-int8_t addOrReplaceTrigger(uint8_t buttonIndex, uint8_t triggerType,
-                           uint16_t mode, int16_t value, const char *keystring)
+static bool sameTriggerSpec(const struct TriggerTerm *a, uint8_t ac,
+                            const struct TriggerTerm *b, uint8_t bc)
 {
-  if (!isTriggerSupportedButton(buttonIndex)) return -1;
+  if (ac != bc) return false;
+  for (uint8_t i = 0; i < ac; i++) {
+    if (a[i].buttonIndex != b[i].buttonIndex ||
+        a[i].triggerType != b[i].triggerType)
+      return false;
+  }
+  return true;
+}
+
+int8_t addOrReplaceTriggerSequence(const struct TriggerTerm *terms, uint8_t termCount,
+                                   uint16_t mode, int16_t value, const char *keystring)
+{
+  if (!terms || termCount == 0 || termCount > MAX_TRIGGER_TERMS) return -1;
+  for (uint8_t i = 0; i < termCount; i++) {
+    if (!isTriggerSupportedButton(terms[i].buttonIndex)) return -1;
+  }
 
   if (!keystring) keystring = "";
 
-  // Reuse an existing slot for the same (button, type) pair.
-  int8_t idx = findTrigger(buttonIndex, triggerType);
-
-  // Otherwise find a free slot.
-  if (idx < 0) {
-    for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
-      if (triggerEntries[i].buttonIndex == 0xFF) { idx = (int8_t)i; break; }
+  int8_t idx = -1;
+  for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
+    if (triggerEntries[i].termCount == 0) continue;
+    if (sameTriggerSpec(triggerEntries[i].terms, triggerEntries[i].termCount, terms, termCount)) {
+      idx = (int8_t)i;
+      break;
     }
   }
 
-  if (idx < 0) return -1;  // table full
+  if (idx < 0) {
+    for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
+      if (triggerEntries[i].termCount == 0) { idx = (int8_t)i; break; }
+    }
+  }
 
-  triggerEntries[idx].buttonIndex = buttonIndex;
-  triggerEntries[idx].triggerType = triggerType;
-  triggerEntries[idx].mode        = mode;
-  triggerEntries[idx].value       = value;
+  if (idx < 0) return -1;
 
-  // Temporarily store keystring pointer at a scratch position so
-  // rebuildKeystringBuffer can read it.
+  triggerEntries[idx].termCount = termCount;
+  memset(triggerEntries[idx].terms, 0, sizeof(triggerEntries[idx].terms));
+  for (uint8_t i = 0; i < termCount; i++) {
+    triggerEntries[idx].terms[i] = terms[i];
+  }
+  triggerEntries[idx].mode  = mode;
+  triggerEntries[idx].value = value;
+
   triggerKeystrings[idx] = (char *)keystring;
   rebuildKeystringBuffer();
 
   return idx;
 }
 
+int8_t addOrReplaceTrigger(uint8_t buttonIndex, uint8_t triggerType,
+                           uint16_t mode, int16_t value, const char *keystring)
+{
+  struct TriggerTerm term;
+  term.buttonIndex = buttonIndex;
+  term.triggerType = triggerType;
+  return addOrReplaceTriggerSequence(&term, 1, mode, value, keystring);
+}
+
 void clearTriggers(int buttonIndex)
 {
   for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
-    if (buttonIndex < 0 ||
-        (int)triggerEntries[i].buttonIndex == buttonIndex) {
-      triggerEntries[i].buttonIndex = 0xFF;
+    bool clearEntry = (buttonIndex < 0);
+    if (!clearEntry && triggerEntries[i].termCount > 0) {
+      for (uint8_t t = 0; t < triggerEntries[i].termCount; t++) {
+        if ((int)triggerEntries[i].terms[t].buttonIndex == buttonIndex) {
+          clearEntry = true;
+          break;
+        }
+      }
+    }
+    if (clearEntry) {
+      triggerEntries[i].termCount = 0;
+      memset(triggerEntries[i].terms, 0, sizeof(triggerEntries[i].terms));
       triggerKeystrings[i] = triggerKeystringBuffer;  // point to empty sentinel
     }
   }
@@ -161,11 +201,40 @@ bool isTriggerSupportedButton(uint8_t idx)
 const char *triggerTypeName(uint8_t type)
 {
   switch (type) {
+    case TRIGGER_TYPE_SINGLE: return "single";
     case TRIGGER_TYPE_LONG:   return "long";
     case TRIGGER_TYPE_DOUBLE: return "double";
     case TRIGGER_TYPE_TRIPLE: return "triple";
     default:                  return "?";
   }
+}
+
+bool hasTriggerTerm(uint8_t buttonIndex, uint8_t triggerType)
+{
+  if (!isTriggerSupportedButton(buttonIndex)) return false;
+  for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
+    if (triggerEntries[i].termCount == 0) continue;
+    for (uint8_t t = 0; t < triggerEntries[i].termCount; t++) {
+      if (triggerEntries[i].terms[t].buttonIndex == buttonIndex &&
+          triggerEntries[i].terms[t].triggerType == triggerType)
+        return true;
+    }
+  }
+  return false;
+}
+
+bool hasCompositeTriggerTerm(uint8_t buttonIndex, uint8_t triggerType)
+{
+  if (!isTriggerSupportedButton(buttonIndex)) return false;
+  for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
+    if (triggerEntries[i].termCount < 2) continue;
+    for (uint8_t t = 0; t < triggerEntries[i].termCount; t++) {
+      if (triggerEntries[i].terms[t].buttonIndex == buttonIndex &&
+          triggerEntries[i].terms[t].triggerType == triggerType)
+        return true;
+    }
+  }
+  return false;
 }
 
 const char *buttonIndexName(uint8_t idx)
@@ -244,14 +313,17 @@ void listTriggers()
 {
   bool any = false;
   for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
-    if (triggerEntries[i].buttonIndex == 0xFF) continue;
-    if (!isTriggerSupportedButton(triggerEntries[i].buttonIndex)) continue;
+    if (triggerEntries[i].termCount == 0) continue;
     any = true;
     Serial.print("TG: ");
-    Serial.print(triggerTypeName(triggerEntries[i].triggerType));
-    Serial.print("(");
-    Serial.print(buttonIndexName(triggerEntries[i].buttonIndex));
-    Serial.print(") -> AT ");
+    for (uint8_t t = 0; t < triggerEntries[i].termCount; t++) {
+      if (t) Serial.print("+");
+      Serial.print(triggerTypeName(triggerEntries[i].terms[t].triggerType));
+      Serial.print("(");
+      Serial.print(buttonIndexName(triggerEntries[i].terms[t].buttonIndex));
+      Serial.print(")");
+    }
+    Serial.print(" -> AT ");
     int actCmd = triggerEntries[i].mode;
     char cmdStr[4];
     if (actCmd >= 0 && actCmd < NUM_COMMANDS) {
@@ -276,17 +348,20 @@ void printTriggersForSlot(Stream *S)
   S->println("AT TG clear");
 
   for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
-    if (triggerEntries[i].buttonIndex == 0xFF) continue;
-    if (!isTriggerSupportedButton(triggerEntries[i].buttonIndex)) continue;
+    if (triggerEntries[i].termCount == 0) continue;
     int actCmd = triggerEntries[i].mode;
     if (actCmd < 0 || actCmd >= NUM_COMMANDS) continue;
 
     // Step 1: trigger spec
     S->print("AT TG ");
-    S->print(triggerTypeName(triggerEntries[i].triggerType));
-    S->print("(");
-    S->print(buttonIndexName(triggerEntries[i].buttonIndex));
-    S->println(")");
+    for (uint8_t t = 0; t < triggerEntries[i].termCount; t++) {
+      if (t) S->print("+");
+      S->print(triggerTypeName(triggerEntries[i].terms[t].triggerType));
+      S->print("(");
+      S->print(buttonIndexName(triggerEntries[i].terms[t].buttonIndex));
+      S->print(")");
+    }
+    S->println("");
 
     // Step 2: action command
     char cmdStr[4];
