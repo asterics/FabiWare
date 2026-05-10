@@ -42,6 +42,106 @@ Have a look at the [AsTeRICS Foundation homepage](https://www.asterics-foundatio
 * [Asterics Grid Open Source AAC](https://grid.asterics.eu) - an open source, cross plattform communicator / talker for Augmented and Alternative Communication (AAC).
 * [The AsTeRICS framework](https://github.com/asterics/AsTeRICS) - provides high flexibility for building Assistive Technology solutions. 
 
+# Complex Trigger System (AT TG Command)
+
+The FabiWare trigger system assigns actions to button gestures:
+- Long-press: hold a button for a configured time
+- Double-press: press twice inside the multi-press window
+- Triple-press: press three times inside the multi-press window
+
+## Important Prerequisite: Enable Thresholds
+
+Triggers are disabled while thresholds are `0`.
+
+```
+AT LP 1500    # long-press threshold in ms
+AT MP 400     # multi-press threshold in ms
+```
+
+- `AT LP <ms>`: long-press threshold (`0` disables long-press triggers)
+- `AT MP <ms>`: multi-press threshold (`0` disables double/triple triggers)
+
+## Basic Trigger Assignment (Two-Step)
+
+`AT TG` works in two steps (similar to `AT BM`):
+
+1. Send trigger specification
+2. Send the action command to store
+
+The action is stored, not executed during assignment.
+
+### Basic Examples
+
+```
+# Long-press on B1
+AT LP 1500
+AT TG long(B1)
+AT KP KEY_A
+
+# Double-press on sip
+AT MP 400
+AT TG double(sip)
+AT CR
+
+# Triple-press on puff
+AT MP 400
+AT TG triple(puff)
+AT CL
+```
+
+## Current Trigger Behavior
+
+### Hierarchical multi-press resolution
+
+If a button has double/triple triggers configured, the normal single action is deferred until the multi-press window closes.
+
+- 1 press and timeout: normal single action executes
+- 2 presses in window: double trigger executes
+- 3 presses in window: triple trigger executes
+
+Only one of these outcomes is selected for that press sequence.
+
+### Hold behavior and safety
+
+Hold-style normal actions (`KH`, `HL/HR/HM`, `PL/PR/PM`, joystick hold-style actions, etc.) are handled safely when double/triple triggers exist:
+
+- The normal hold action is delayed until it is clear no double/triple gesture will happen
+- If a long/double/triple trigger takes over, active hold state is released before the trigger action runs
+- Deferred hold actions are never left sticky; release is always enforced when transitioning between actions
+
+## Supported Button Names for `AT TG`
+
+You can assign triggers to:
+
+- Physical buttons: `B1`, `B2`, `B3`, `B4`, `B5`
+- Cursor buttons: `up`, `down`, `left`, `right`
+- Sip/Puff buttons: `sip`, `puff`, `strongsip`, `strongpuff`
+
+The names below are still recognized, but trigger assignment is currently disabled for them:
+
+- `ssup`, `ssdown`, `ssleft`, `ssright`
+- `spup`, `spdown`, `spleft`, `spright`
+
+## Trigger Management Commands
+
+```
+AT TG list
+AT TG clear
+AT TG clear(B1)
+```
+
+## Notes on Saving/Loading Slots
+
+Triggers are saved and restored with slots.
+
+`AT TG clear` is intentionally written before saved trigger definitions so loading a slot first removes old triggers from the previously active slot.
+
+## Minimal Troubleshooting
+
+- Triggers do not fire: ensure `AT LP`/`AT MP` are set to values greater than `0`
+- Trigger missing or wrong action: verify with `AT TG list` and reassign if needed
+- Multi-press not detected: increase `AT MP` if your press sequence is slower
+
 # Links and Credits
 Most of this work has been accomplished at the UAS Technikum Wien in course of the R&D-projects [ToRaDes](https://embsys.technikum-wien.at/projects/torades/index.php) (MA23 project 18-04),
 [WBT](https://wbt.wien) (MA23 project 26-02) and [InDiKo](https://www.technikum-wien.at/en/research-projects/indiko/) (MA23 project 38-09), which have been supported by the [City of Vienna](https://www.wien.gv.at/kontakte/ma23/index.html).

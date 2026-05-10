@@ -138,6 +138,12 @@ uint16_t readPercentage() {
  * @return none
  */
 void performBatteryManagement()  {
+  #ifdef DEBUG_SLEEP_WITH_USB
+    const bool sleepWithUsb = DEBUG_SLEEP_WITH_USB;
+  #else
+    const bool sleepWithUsb = false;
+  #endif
+
   detectUSB();
   batteryPresenceDetector();
   currentState.currentBattPercent = getBatteryPercentage();
@@ -148,7 +154,7 @@ void performBatteryManagement()  {
 
   // check user inactivity, possibly initiate power save mode
 
-  if (!currentState.usbConnected || DEBUG_SLEEP_WITH_USB) {
+  if (!currentState.usbConnected || sleepWithUsb) {
     inactivityTime += BATTERY_UPDATE_INTERVAL;
     if (inactivityTime >= (inactivityTimeMinutes*60000 + inactivityTimeSeconds*1000))
       inactivityHandler();  // time to go to sleep...

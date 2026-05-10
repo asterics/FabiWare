@@ -121,7 +121,37 @@
           AT AD <int>     time threshold for automatic dwell-click (e.g. "AT DW 700" creates a left click 700 ms after mouse movement, 0=disable)
           AT LP <int>     time threshold for long-press (e.g. "AT LP 1500" select the long-press-function of a button after 1500ms hold time, 0=disable)
           AT MP <int>     time threshold for multi-press (e.g. "AT MP 400" sets the threshold for time between multiple presses to 400 ms, 0=disable)
- 
+
+    Complex trigger commands (AT TG) - two-step assignment like AT BM:
+
+          AT TG long(<btn>)    puts system into trigger-assignment mode for a long-press trigger of <btn>.
+                               The next AT command defines the action fired when <btn> is held >= AT LP threshold.
+                               Example:  "AT TG long(B1)"  followed by  "AT KP KEY_A"
+          AT TG double(<btn>)  trigger-assignment mode for a double-press trigger.
+                               The next AT command fires on the 2nd consecutive press within AT MP threshold.
+                               Example:  "AT TG double(sip)"  followed by  "AT CR"
+          AT TG triple(<btn>)  trigger-assignment mode for a triple-press trigger.
+                               Example:  "AT TG triple(puff)"  followed by  "AT CL"
+          AT TG list           lists all currently active trigger definitions
+          AT TG clear          removes all trigger definitions
+          AT TG clear(<btn>)   removes all trigger definitions for the specified button
+
+          Supported button names for <btn>:
+            B1..B5 (physical buttons), up, down, left, right,
+            sip, puff, strongsip, strongpuff,
+            ssup, ssdown, ssleft, ssright  (strong-sip + direction)
+            spup, spdown, spleft, spright  (strong-puff + direction)
+
+          Long-press behavior (additive):
+            The button's normal action fires immediately on press (unchanged).
+            After AT LP ms while still held, the long-press trigger action fires additionally.
+
+          Multi-press behavior (additive):
+            The button's normal action fires on every press (unchanged).
+            On the 2nd press within AT MP ms the double trigger fires additionally.
+            On the 3rd press within AT MP ms the triple trigger fires additionally.
+            Setting the normal button action to AT NC makes it purely trigger-driven.
+
     Mode change and others:
           AT MM <uint>    mouse mode: cursor on (uint==1) or alternative functions on (uint==0)
           AT SW           switch between mouse cursor and alternative functions
@@ -189,7 +219,7 @@ enum atCommands {
   CMD_BT, CMD_SC, CMD_SR, CMD_ER, CMD_CA, CMD_MA, CMD_WA, CMD_TS, CMD_TP, CMD_SP, CMD_SS, CMD_IR, 
   CMD_IP, CMD_IH, CMD_IS, CMD_IC, CMD_IW, CMD_IL, CMD_IT, CMD_MM, CMD_SW, CMD_AX, CMD_AY, 
   CMD_DX, CMD_DY, CMD_MS, CMD_AC, CMD_RO, CMD_SB, CMD_AT, CMD_AP, CMD_AR, CMD_AL, CMD_AV, CMD_AB,
-  CMD_AD, CMD_LP, CMD_MP, 
+  CMD_AD, CMD_LP, CMD_MP, CMD_TG, 
 #ifdef FLIPMOUSE
   CMD_BC, CMD_BR, CMD_UG,
 #endif

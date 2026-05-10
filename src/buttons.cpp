@@ -18,12 +18,57 @@
 #include "buttons.h"
 #include "infrared.h"
 #include "keys.h"
+#include "triggers.h"
 
 struct slotButtonSettings buttons [NUMBER_OF_BUTTONS];   // array for all buttons - type definition see FabiWare.h
 char * buttonKeystrings[NUMBER_OF_BUTTONS];              // pointers to keystring parameters
 char keystringBuffer[MAX_KEYSTRINGBUFFER_LEN]={0};       // storage for keystring parameters for all buttons
 struct buttonDebouncerType buttonDebouncers [NUMBER_OF_BUTTONS];   // array for all buttonsDebouncers - type definition see fabi.h
 uint32_t buttonStates = 0;  // current button states for reporting raw values (AT SR)
+
+static void executeTriggerAction(int8_t trigIdx)
+{
+  if (trigIdx < 0) return;
+  performCommand(triggerEntries[trigIdx].mode, triggerEntries[trigIdx].value,
+                 getTriggerKeystring(trigIdx), 1);
+}
+
+static void releaseButtonHoldAction(int buttonIndex)
+{
+  switch (buttons[buttonIndex].mode) {
+    case CMD_MX: currentState.autoMoveX = 0; break;
+    case CMD_MY: currentState.autoMoveY = 0; break;
+    case CMD_PL:
+    case CMD_HL: mouseRelease(MOUSE_LEFT); break;
+    case CMD_PR:
+    case CMD_HR: mouseRelease(MOUSE_RIGHT); break;
+    case CMD_PM:
+    case CMD_HM: mouseRelease(MOUSE_MIDDLE); break;
+    case CMD_JP: joystickButton(buttons[buttonIndex].value, 0); break;
+    case CMD_J0: joystickAxis(0,512); break;
+    case CMD_J1: joystickAxis(1,512); break;
+    case CMD_J2: joystickAxis(2,512); break;
+    case CMD_J3: joystickAxis(3,512); break;
+    case CMD_J4: joystickAxis(4,512); break;
+    case CMD_J5: joystickAxis(5,512); break;
+    case CMD_JH: joystickHat(-1); break;
+    case CMD_KH: releaseKeys(buttonKeystrings[buttonIndex]); break;
+    case CMD_IH: stop_IR_command(); break;
+    default: break;
+  }
+}
+
+static void executeNormalButtonAction(int buttonIndex)
+{
+  performCommand(buttons[buttonIndex].mode, buttons[buttonIndex].value,
+                 buttonKeystrings[buttonIndex], 1);
+
+  // If the button is already released when a deferred single action is resolved,
+  // immediately release hold-style actions to avoid sticky states.
+  if (inHoldMode(buttonIndex) && ((buttonStates & (1UL << buttonIndex)) == 0)) {
+    releaseButtonHoldAction(buttonIndex);
+  }
+}
 
 void initButtonKeystrings()
 {
@@ -103,6 +148,7 @@ uint16_t setButtonKeystring(uint8_t buttonIndex, char const * newKeystring)
 void initButtons() {
 
   initButtonKeystrings();
+  initTriggers();    // clear all trigger entries for this slot
 
   // set default functions
   for (int i=0;i<NUMBER_OF_BUTTONS;i++) {
@@ -134,7 +180,43 @@ void handlePress (int buttonIndex)   // a button was pressed
     Serial.print(buttons[buttonIndex].mode); Serial.print(" "); Serial.print(buttons[buttonIndex].value); Serial.print(" "); Serial.println(buttonKeystrings[buttonIndex]);
   #endif
   buttonStates |= (1<<buttonIndex); //save for reporting
-  performCommand(buttons[buttonIndex].mode, buttons[buttonIndex].value, buttonKeystrings[buttonIndex], 1);
+  buttonDebouncers[buttonIndex].longPressed = 0;   // reset long-press flag for this press
+  buttonDebouncers[buttonIndex].timestamp = millis(); // start measuring hold time for long-press
+  // Hierarchical handling for non-hold actions:
+  // if double/triple are configured, delay firing until timeout so only the
+  // most specific matching action (single/double/triple) is executed.
+  int8_t trigDouble = findTrigger((uint8_t)buttonIndex, TRIGGER_TYPE_DOUBLE);
+  int8_t trigTriple = findTrigger((uint8_t)buttonIndex, TRIGGER_TYPE_TRIPLE);
+  if (globalSettings.thresholdMultiPress > 0 &&
+      (trigDouble >= 0 || trigTriple >= 0)) {
+    uint32_t now = millis();
+    if (buttonDebouncers[buttonIndex].multiPending &&
+        ((uint32_t)(now - buttonDebouncers[buttonIndex].lastReleaseTime) <= globalSettings.thresholdMultiPress)) {
+      if (buttonDebouncers[buttonIndex].pressCount < 3)
+        buttonDebouncers[buttonIndex].pressCount++;
+    } else {
+      buttonDebouncers[buttonIndex].pressCount = 1;
+    }
+    buttonDebouncers[buttonIndex].multiPending = 1;
+
+    // If no more specific trigger can follow, execute immediately.
+    if (buttonDebouncers[buttonIndex].pressCount >= 3 && trigTriple >= 0) {
+      releaseButtonHoldAction(buttonIndex);
+      executeTriggerAction(trigTriple);
+      buttonDebouncers[buttonIndex].pressCount = 0;
+      buttonDebouncers[buttonIndex].multiPending = 0;
+    }
+    else if (buttonDebouncers[buttonIndex].pressCount >= 2 && trigDouble >= 0 && trigTriple < 0) {
+      releaseButtonHoldAction(buttonIndex);
+      executeTriggerAction(trigDouble);
+      buttonDebouncers[buttonIndex].pressCount = 0;
+      buttonDebouncers[buttonIndex].multiPending = 0;
+    }
+    return;
+  }
+
+  // No hierarchical multi-press case: execute normal action immediately.
+  executeNormalButtonAction(buttonIndex);
 }
 
 void handleRelease (int buttonIndex)    // a button was released: deal with "sticky"-functions
@@ -143,6 +225,7 @@ void handleRelease (int buttonIndex)    // a button was released: deal with "sti
     Serial.print("R: "); Serial.println(buttonIndex);
   #endif
   buttonStates &= ~(1<<buttonIndex); //save for reporting
+  buttonDebouncers[buttonIndex].lastReleaseTime = millis();  // for multi-press detection
   switch (buttons[buttonIndex].mode) {
     // release mouse actions
     case CMD_MX: currentState.autoMoveX = 0; break;
@@ -177,6 +260,78 @@ void handleRelease (int buttonIndex)    // a button was released: deal with "sti
   }
 }
 
+void processLongPressTriggers()
+{
+  if (globalSettings.thresholdLongPress == 0) return;
+
+  uint32_t now = millis();
+  for (int i = 0; i < NUMBER_OF_BUTTONS; i++) {
+    if ((buttonStates & (1UL << i)) == 0) continue;   // currently not pressed
+    if (buttonDebouncers[i].longPressed) continue;    // already fired during this press
+
+    uint32_t heldFor = now - buttonDebouncers[i].timestamp;
+    if ((uint32_t)heldFor >= globalSettings.thresholdLongPress) {
+      int8_t trigIdx = findTrigger((uint8_t)i, TRIGGER_TYPE_LONG);
+      buttonDebouncers[i].longPressed = 1;            // fire at most once per press
+      if (trigIdx >= 0) {
+        // A long-press trigger supersedes any pending single/double/triple resolution
+        // from this press sequence.
+        buttonDebouncers[i].pressCount = 0;
+        buttonDebouncers[i].multiPending = 0;
+        releaseButtonHoldAction(i);
+        executeTriggerAction(trigIdx);
+      }
+    }
+  }
+}
+
+void processMultiPressTriggers()
+{
+  if (globalSettings.thresholdMultiPress == 0) return;
+
+  uint32_t now = millis();
+  for (int i = 0; i < NUMBER_OF_BUTTONS; i++) {
+    if (!buttonDebouncers[i].multiPending) continue;
+
+    // If button is still held and no follow-up press can occur, resolve delayed
+    // hold-style single action once MP timeout elapsed.
+    if ((buttonStates & (1UL << i)) != 0) {
+      if (buttonDebouncers[i].pressCount == 1 && inHoldMode(i) &&
+          ((uint32_t)(now - buttonDebouncers[i].timestamp) > globalSettings.thresholdMultiPress)) {
+        executeNormalButtonAction(i);
+        buttonDebouncers[i].pressCount = 0;
+        buttonDebouncers[i].multiPending = 0;
+      }
+      continue;
+    }
+
+    // lastReleaseTime==0 means no release has happened yet for this sequence.
+    if (buttonDebouncers[i].lastReleaseTime == 0) continue;
+
+    if ((uint32_t)(now - buttonDebouncers[i].lastReleaseTime) <= globalSettings.thresholdMultiPress)
+      continue; // still within multi-press window
+
+    int8_t trigDouble = findTrigger((uint8_t)i, TRIGGER_TYPE_DOUBLE);
+    int8_t trigTriple = findTrigger((uint8_t)i, TRIGGER_TYPE_TRIPLE);
+
+    if (buttonDebouncers[i].pressCount >= 3 && trigTriple >= 0) {
+      releaseButtonHoldAction(i);
+      executeTriggerAction(trigTriple);
+    }
+    else if (buttonDebouncers[i].pressCount >= 2 && trigDouble >= 0) {
+      releaseButtonHoldAction(i);
+      executeTriggerAction(trigDouble);
+    }
+    else if (buttonDebouncers[i].pressCount >= 1) {
+      // fall back to the normal single action after timeout
+      executeNormalButtonAction(i);
+    }
+
+    buttonDebouncers[i].pressCount = 0;
+    buttonDebouncers[i].multiPending = 0;
+  }
+}
+
 
 uint8_t handleButton(int i, uint8_t state)    // button debouncing and press detection
 {
@@ -192,7 +347,6 @@ uint8_t handleButton(int i, uint8_t state)    // button debouncing and press det
             //if (inHoldMode(i))
             buttonStates |= (1<<i); //save for reporting
             handlePress(i);
-            buttonDebouncers[i].timestamp = millis(); // start measuring time
             #ifdef RP2350
               userActivity(); // keep system from going into dormant mode (see lpwFuncs.h)
             #endif
@@ -201,14 +355,28 @@ uint8_t handleButton(int i, uint8_t state)    // button debouncing and press det
             // if (!inHoldMode(i))
             //   handlePress(i);
             buttonStates &= ~(1<<i); //save for reporting
-            if (inHoldMode(i))
-              handleRelease(i);
+            handleRelease(i);
             return (1);        // indicate that button action has been performed !
           }
         }
       }
     }
     else {  // in stable state
+      // --- long-press trigger detection (additive, physical buttons only) ---
+      if (buttonDebouncers[i].stableState == 1 &&   // button is currently held
+          globalSettings.thresholdLongPress > 0  &&
+          !buttonDebouncers[i].longPressed) {
+        if ((uint32_t)(millis() - buttonDebouncers[i].timestamp) >= globalSettings.thresholdLongPress) {
+          int8_t trigIdx = findTrigger((uint8_t)i, TRIGGER_TYPE_LONG);
+          if (trigIdx >= 0) {
+            buttonDebouncers[i].longPressed = 1;   // fire only once per press
+            performCommand(triggerEntries[trigIdx].mode, triggerEntries[trigIdx].value,
+                           getTriggerKeystring(trigIdx), 1);
+          } else {
+            buttonDebouncers[i].longPressed = 1;   // no trigger defined: suppress repeated checks
+          }
+        }
+      }
     }
   }
   else {
@@ -246,9 +414,12 @@ void initDebouncers()
 {
   for (int i = 0; i < NUMBER_OF_BUTTONS; i++) // initialize button array
   {
-    buttonDebouncers[i].bounceState = 0;
-    buttonDebouncers[i].stableState = 0;
-    buttonDebouncers[i].bounceCount = 0;
-    buttonDebouncers[i].longPressed = 0;
+    buttonDebouncers[i].bounceState   = 0;
+    buttonDebouncers[i].stableState   = 0;
+    buttonDebouncers[i].bounceCount   = 0;
+    buttonDebouncers[i].longPressed   = 0;
+    buttonDebouncers[i].pressCount    = 0;
+    buttonDebouncers[i].lastReleaseTime = 0;
+    buttonDebouncers[i].multiPending  = 0;
   }
 }

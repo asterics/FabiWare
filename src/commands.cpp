@@ -26,6 +26,7 @@
 #include "parser.h"
 #include "reporting.h"
 #include "sensors.h"
+#include "triggers.h"
 #include <hardware/watchdog.h>
 
 /**
@@ -73,6 +74,7 @@ const struct atCommandType atCommands[] PROGMEM = {
   {"AV"  , PARTYPE_UINT },  {"AB"  , PARTYPE_UINT },
   /***** timing *****/
   {"AD"  , PARTYPE_UINT }, {"LP"  , PARTYPE_UINT }, {"MP"  , PARTYPE_UINT },
+  {"TG"  , PARTYPE_STRING },  // complex trigger assignment
   #ifdef FLIPMOUSE
     /***** BT-Housekeeping / FM-Only *****/
     {"BC"  , PARTYPE_STRING}, {"BR"  , PARTYPE_UINT }, {"UG", PARTYPE_NONE },
@@ -97,8 +99,19 @@ const char ERRORMESSAGE_EEPROM_FULL[] = "E: eeprom full";
 */
 void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodicMouseMovement)
 {
-  static uint8_t actButton = 0;   // to remember the button number for the button-mode-assignment AT command "AT BM"
-  
+  static uint8_t actButton = 0;        // button number for AT BM assignment (1-based; 0 = inactive)
+  static uint8_t actTriggerButton = 0; // button number for AT TG assignment (1-based; 0 = inactive)
+  static uint8_t actTriggerType   = 0; // trigger type for AT TG assignment
+
+  // If the previous command was AT TG <spec>: store the current command as trigger action.
+  if (actTriggerButton != 0) {
+    addOrReplaceTrigger(actTriggerButton - 1, actTriggerType,
+                        cmd, par1, keystring ? keystring : "");
+    actTriggerButton = 0;
+    actTriggerType   = 0;
+    return;
+  }
+
   if (actButton != 0)  // if last command was BM (set buttonmode): store current command for this button !!
   {
 #ifdef DEBUG_OUTPUT_FULL
@@ -207,6 +220,60 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
     case CMD_MP:
       globalSettings.thresholdMultiPress = par1;
       break;
+
+    case CMD_TG: {
+      if (!keystring || !*keystring) break;
+
+      // AT TG list
+      if (strcasecmp(keystring, "list") == 0) {
+        listTriggers();
+        break;
+      }
+
+      // AT TG clear
+      if (strcasecmp(keystring, "clear") == 0) {
+        clearTriggers(-1);
+        Serial.println("OK");
+        break;
+      }
+
+      // AT TG clear(<btn>)
+      if (strncasecmp(keystring, "clear(", 6) == 0) {
+        char *p   = keystring + 6;
+        char *end = strchr(p, ')');
+        if (end) {
+          *end = 0;
+          int8_t idx = parseButtonName(p);
+          if (idx >= 0) { clearTriggers(idx); Serial.println("OK"); }
+          else           Serial.println("?");
+        }
+        break;
+      }
+
+      // AT TG long(<btn>)  /  double(<btn>)  /  triple(<btn>)
+      uint8_t trigType = 0;
+      char   *p        = nullptr;
+      if      (strncasecmp(keystring, "long(",   5) == 0) { trigType = TRIGGER_TYPE_LONG;   p = keystring + 5; }
+      else if (strncasecmp(keystring, "double(", 7) == 0) { trigType = TRIGGER_TYPE_DOUBLE; p = keystring + 7; }
+      else if (strncasecmp(keystring, "triple(", 7) == 0) { trigType = TRIGGER_TYPE_TRIPLE; p = keystring + 7; }
+
+      if (trigType && p) {
+        char *end = strchr(p, ')');
+        if (end) {
+          *end = 0;
+          int8_t btnIdx = parseButtonName(p);
+          if (btnIdx >= 0 && isTriggerSupportedButton((uint8_t)btnIdx)) {
+            actTriggerButton = (uint8_t)(btnIdx + 1);  // 1-based
+            actTriggerType   = trigType;
+          } else {
+            Serial.println("?");
+          }
+        }
+      } else {
+        Serial.println("?");
+      }
+      break;
+    }
     case CMD_J0:
       joystickAxis(0,par1);
       break;

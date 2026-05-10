@@ -19,6 +19,7 @@
 #include "reporting.h"
 #include "parser.h"
 #include "sensors.h"
+#include "triggers.h"
 #include <LittleFS.h>
 
 /**
@@ -104,6 +105,7 @@ void printCurrentSlot(Stream *S)
     }
     S->println("");
   }
+  printTriggersForSlot(S);
   S->flush();
 }
 

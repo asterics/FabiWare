@@ -80,6 +80,11 @@ void handleUserInteraction()
   currentState.oldButtonStates = currentState.buttonStates;
   currentState.oldI2CButtonStates = currentState.I2CButtonStates;
 
+  // Long-press trigger evaluation must run independent of the concrete input path
+  // (physical GPIO, I2C buttons, sip/puff state machine, etc.).
+  processLongPressTriggers();
+  processMultiPressTriggers();
+
   #ifndef FLIPMOUSE
   // SDA&SCL as GPIOs
   if(currentState.useI2CasGPIO) {

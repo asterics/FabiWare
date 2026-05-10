@@ -71,6 +71,10 @@ struct buttonDebouncerType {
   uint8_t stableState;
   uint8_t longPressed;
   uint32_t timestamp;
+  // --- trigger support ---
+  uint8_t  pressCount;      // consecutive press counter for multi-press detection
+  uint32_t lastReleaseTime; // timestamp of the last button release
+   uint8_t  multiPending;    // 1 while waiting for multi-press resolution timeout
 } ;
 
 /**
@@ -130,6 +134,20 @@ void handlePress (int buttonIndex);      // a button was pressed
    @return none
 */
 void handleRelease (int buttonIndex);    // a button was released
+
+/**
+   @name processLongPressTriggers
+   @brief periodically checks all currently pressed buttons for long-press triggers
+   @return none
+*/
+void processLongPressTriggers();
+
+/**
+   @name processMultiPressTriggers
+   @brief resolves pending single/double/triple actions after multi-press timeout
+   @return none
+*/
+void processMultiPressTriggers();
 
 /**
    @name handleButton
