@@ -91,7 +91,8 @@ static bool sameTriggerSpec(const struct TriggerTerm *a, uint8_t ac,
   if (ac != bc) return false;
   for (uint8_t i = 0; i < ac; i++) {
     if (a[i].buttonIndex != b[i].buttonIndex ||
-        a[i].triggerType != b[i].triggerType)
+        a[i].triggerType != b[i].triggerType ||
+        a[i].duration    != b[i].duration)
       return false;
   }
   return true;
@@ -166,6 +167,23 @@ void clearTriggers(int buttonIndex)
     }
   }
   rebuildKeystringBuffer();
+}
+
+bool clearTriggerByListIndex(uint8_t listIndex)
+{
+  uint8_t count = 0;
+  for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
+    if (triggerEntries[i].termCount == 0) continue;
+    count++;
+    if (count == listIndex) {
+      triggerEntries[i].termCount = 0;
+      memset(triggerEntries[i].terms, 0, sizeof(triggerEntries[i].terms));
+      triggerKeystrings[i] = triggerKeystringBuffer;
+      rebuildKeystringBuffer();
+      return true;
+    }
+  }
+  return false;
 }
 
 char *getTriggerKeystring(int8_t trigIdx)
@@ -318,9 +336,14 @@ void listTriggers()
     Serial.print("TG: ");
     for (uint8_t t = 0; t < triggerEntries[i].termCount; t++) {
       if (t) Serial.print("+");
-      Serial.print(triggerTypeName(triggerEntries[i].terms[t].triggerType));
+      const struct TriggerTerm *tm = &triggerEntries[i].terms[t];
+      Serial.print(triggerTypeName(tm->triggerType));
       Serial.print("(");
-      Serial.print(buttonIndexName(triggerEntries[i].terms[t].buttonIndex));
+      Serial.print(buttonIndexName(tm->buttonIndex));
+      if (tm->triggerType == TRIGGER_TYPE_LONG && tm->duration > 0) {
+        Serial.print(",");
+        Serial.print(tm->duration);
+      }
       Serial.print(")");
     }
     Serial.print(" -> AT ");
@@ -356,9 +379,14 @@ void printTriggersForSlot(Stream *S)
     S->print("AT TG ");
     for (uint8_t t = 0; t < triggerEntries[i].termCount; t++) {
       if (t) S->print("+");
-      S->print(triggerTypeName(triggerEntries[i].terms[t].triggerType));
+      const struct TriggerTerm *tm = &triggerEntries[i].terms[t];
+      S->print(triggerTypeName(tm->triggerType));
       S->print("(");
-      S->print(buttonIndexName(triggerEntries[i].terms[t].buttonIndex));
+      S->print(buttonIndexName(tm->buttonIndex));
+      if (tm->triggerType == TRIGGER_TYPE_LONG && tm->duration > 0) {
+        S->print(",");
+        S->print(tm->duration);
+      }
       S->print(")");
     }
     S->println("");

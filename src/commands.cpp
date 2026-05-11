@@ -105,11 +105,23 @@ static bool parseTriggerTerm(char *term, struct TriggerTerm *out)
   else if (strcasecmp(term, "triple") == 0) trigType = TRIGGER_TYPE_TRIPLE;
   else return false;
 
-  int8_t btnIdx = parseButtonName(open + 1);
+  // For long(B1,1000): check for optional duration after a comma inside the parentheses
+  char *content = open + 1;
+  uint16_t customDuration = 0;
+  if (trigType == TRIGGER_TYPE_LONG) {
+    char *comma = strchr(content, ',');
+    if (comma) {
+      *comma = 0;
+      customDuration = (uint16_t)atoi(comma + 1);
+    }
+  }
+
+  int8_t btnIdx = parseButtonName(content);
   if (btnIdx < 0 || !isTriggerSupportedButton((uint8_t)btnIdx)) return false;
 
   out->triggerType = trigType;
   out->buttonIndex = (uint8_t)btnIdx;
+  out->duration    = customDuration;
   return true;
 }
 
@@ -286,15 +298,24 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
         break;
       }
 
-      // AT TG clear(<btn>)
+      // AT TG clear(<btn>) or AT TG clear(<n>) where n is 1-based list index
       if (strncasecmp(keystring, "clear(", 6) == 0) {
         char *p   = keystring + 6;
         char *end = strchr(p, ')');
         if (end) {
           *end = 0;
-          int8_t idx = parseButtonName(p);
-          if (idx >= 0) { clearTriggers(idx); Serial.println("OK"); }
-          else           Serial.println("?");
+          // Check if argument is a positive integer (list index)
+          bool isNumber = (*p != 0);
+          for (char *c = p; *c; c++) { if (*c < '0' || *c > '9') { isNumber = false; break; } }
+          if (isNumber && *p != 0) {
+            uint8_t listIdx = (uint8_t)atoi(p);
+            if (listIdx > 0 && clearTriggerByListIndex(listIdx)) Serial.println("OK");
+            else Serial.println("?");
+          } else {
+            int8_t idx = parseButtonName(p);
+            if (idx >= 0) { clearTriggers(idx); Serial.println("OK"); }
+            else           Serial.println("?");
+          }
         }
         break;
       }

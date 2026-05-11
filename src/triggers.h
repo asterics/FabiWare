@@ -57,8 +57,9 @@
 #define MAX_TRIGGER_TERMS               4   // maximum terms per trigger expression
 
 struct TriggerTerm {
-   uint8_t triggerType;
-   uint8_t buttonIndex;
+   uint8_t  triggerType;
+   uint8_t  buttonIndex;
+   uint16_t duration;   // For TRIGGER_TYPE_LONG: custom hold time in ms (0 = use globalSettings.thresholdLongPress)
 };
 
 /**
@@ -123,6 +124,14 @@ int8_t addOrReplaceTriggerSequence(const struct TriggerTerm *terms, uint8_t term
    @return none
 */
 void clearTriggers(int buttonIndex);
+
+/**
+   @name clearTriggerByListIndex
+   @brief Remove the Nth active trigger (1-based list order, as shown by AT TG list).
+   @param listIndex 1-based position in the active trigger list
+   @return true if found and removed, false if out of range
+*/
+bool clearTriggerByListIndex(uint8_t listIndex);
 
 /**
    @name getTriggerKeystring

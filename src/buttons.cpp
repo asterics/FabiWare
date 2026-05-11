@@ -31,6 +31,8 @@ static uint8_t  sequenceTermPressCount[MAX_TRIGGER_COUNT];
 static uint32_t sequenceTermPressTime[MAX_TRIGGER_COUNT];
 static uint8_t  normalActionStarted[NUMBER_OF_BUTTONS];
 static uint8_t  pendingDoubleEventEmitted[NUMBER_OF_BUTTONS];
+static int8_t   pendingLongTrigIdx[NUMBER_OF_BUTTONS];       // deferred long-press tier awaiting release; -1 = none
+static uint32_t pendingLongEmittedDuration[NUMBER_OF_BUTTONS]; // last duration at which LONG event was emitted for composite
 
 static void releaseButtonHoldAction(int buttonIndex);
 
@@ -434,6 +436,8 @@ void handlePress (int buttonIndex)   // a button was pressed
   buttonStates |= (1<<buttonIndex); //save for reporting
   buttonDebouncers[buttonIndex].longPressed = 0;   // reset long-press flag for this press
   buttonDebouncers[buttonIndex].timestamp = millis(); // start measuring hold time for long-press
+  pendingLongTrigIdx[buttonIndex] = -1;
+  pendingLongEmittedDuration[buttonIndex] = 0;
   processSequencePressEvent((uint8_t)buttonIndex, buttonDebouncers[buttonIndex].timestamp);
   // Hierarchical handling for non-hold actions:
   // if double/triple are configured, delay firing until timeout so only the
@@ -511,6 +515,20 @@ void handleRelease (int buttonIndex)    // a button was released: deal with "sti
     }
   }
 
+  // Fire deferred long-press trigger if button released before highest duration tier was crossed
+  if (pendingLongTrigIdx[buttonIndex] >= 0 && !buttonDebouncers[buttonIndex].longPressed) {
+    int8_t trigIdx = pendingLongTrigIdx[buttonIndex];
+    pendingLongTrigIdx[buttonIndex] = -1;
+    buttonDebouncers[buttonIndex].longPressed = 1;
+    buttonDebouncers[buttonIndex].pressCount = 0;
+    buttonDebouncers[buttonIndex].multiPending = 0;
+    releaseButtonHoldAction(buttonIndex);
+    executeTriggerAction(trigIdx);
+    normalActionStarted[buttonIndex] = 0;
+    pendingDoubleEventEmitted[buttonIndex] = 0;
+    return;
+  }
+
   if (buttonDebouncers[buttonIndex].multiPending) {
     bool wantsDoubleTerm = hasTriggerTerm((uint8_t)buttonIndex, TRIGGER_TYPE_DOUBLE);
     bool wantsTripleTerm = hasTriggerTerm((uint8_t)buttonIndex, TRIGGER_TYPE_TRIPLE);
@@ -585,27 +603,68 @@ void handleRelease (int buttonIndex)    // a button was released: deal with "sti
 
 void processLongPressTriggers()
 {
-  if (globalSettings.thresholdLongPress == 0) return;
-
   uint32_t now = millis();
   for (int i = 0; i < NUMBER_OF_BUTTONS; i++) {
     if ((buttonStates & (1UL << i)) == 0) continue;   // currently not pressed
     if (buttonDebouncers[i].longPressed) continue;    // already fired during this press
 
     uint32_t heldFor = now - buttonDebouncers[i].timestamp;
-    if ((uint32_t)heldFor >= globalSettings.thresholdLongPress) {
-      int8_t trigIdx = findTrigger((uint8_t)i, TRIGGER_TYPE_LONG);
-      bool wantsLongTerm = hasTriggerTerm((uint8_t)i, TRIGGER_TYPE_LONG);
-      buttonDebouncers[i].longPressed = 1;            // fire at most once per press
-      if (wantsLongTerm) {
-        // A long-press trigger supersedes any pending single/double/triple resolution
-        // from this press sequence.
+
+    // ---- Emit LONG events for composite sequence terms at their specific durations ----
+    // Each unique threshold is emitted once per press (gated by pendingLongEmittedDuration).
+    for (int j = 0; j < MAX_TRIGGER_COUNT; j++) {
+      if (triggerEntries[j].termCount < 2) continue;
+      for (uint8_t t = 0; t < triggerEntries[j].termCount; t++) {
+        if (triggerEntries[j].terms[t].buttonIndex != (uint8_t)i) continue;
+        if (triggerEntries[j].terms[t].triggerType != TRIGGER_TYPE_LONG) continue;
+        uint32_t dur = triggerEntries[j].terms[t].duration;
+        if (dur == 0) dur = globalSettings.thresholdLongPress;
+        if (dur == 0) break;
+        if (heldFor >= dur && dur > pendingLongEmittedDuration[i]) {
+          pendingLongEmittedDuration[i] = dur;
+          buttonDebouncers[i].pressCount = 0;
+          buttonDebouncers[i].multiPending = 0;
+          releaseButtonHoldAction(i);
+          (void)emitTriggerEvent((uint8_t)i, TRIGGER_TYPE_LONG, now);
+        }
+        break; // only first long term per trigger entry matters
+      }
+    }
+
+    // ---- Simple single-term long triggers: multi-tier deferred firing ----
+    // Collect the highest exceeded tier; defer if a higher tier still exists.
+    int8_t   bestFitIdx      = -1;
+    uint32_t bestFitDuration = 0;
+    bool     hasHigher       = false;
+    for (int j = 0; j < MAX_TRIGGER_COUNT; j++) {
+      if (triggerEntries[j].termCount != 1) continue;
+      if (triggerEntries[j].terms[0].buttonIndex != (uint8_t)i) continue;
+      if (triggerEntries[j].terms[0].triggerType != TRIGGER_TYPE_LONG) continue;
+      uint32_t dur = triggerEntries[j].terms[0].duration;
+      if (dur == 0) dur = globalSettings.thresholdLongPress;
+      if (dur == 0) continue;
+      if (heldFor >= dur) {
+        if (dur > bestFitDuration) {
+          bestFitDuration = dur;
+          bestFitIdx = j;
+        }
+      } else {
+        hasHigher = true;
+      }
+    }
+
+    if (bestFitIdx >= 0) {
+      pendingLongTrigIdx[i] = bestFitIdx;   // update best tier seen so far
+      if (!hasHigher) {
+        // Highest tier has been crossed — fire immediately
+        buttonDebouncers[i].longPressed = 1;
+        pendingLongTrigIdx[i] = -1;
         buttonDebouncers[i].pressCount = 0;
         buttonDebouncers[i].multiPending = 0;
         releaseButtonHoldAction(i);
-        if (trigIdx >= 0) executeTriggerAction(trigIdx);
-        (void)emitTriggerEvent((uint8_t)i, TRIGGER_TYPE_LONG, millis());
+        executeTriggerAction(bestFitIdx);
       }
+      // else: still waiting for a higher tier; fire on release via handleRelease
     }
   }
 }
@@ -708,19 +767,30 @@ uint8_t handleButton(int i, uint8_t state)    // button debouncing and press det
       }
     }
     else {  // in stable state
-      // --- long-press trigger detection (additive, physical buttons only) ---
+      // --- long-press trigger detection (for virtual buttons not tracked by processLongPressTriggers) ---
       if (buttonDebouncers[i].stableState == 1 &&   // button is currently held
-          globalSettings.thresholdLongPress > 0  &&
           !buttonDebouncers[i].longPressed) {
-        if ((uint32_t)(millis() - buttonDebouncers[i].timestamp) >= globalSettings.thresholdLongPress) {
-          int8_t trigIdx = findTrigger((uint8_t)i, TRIGGER_TYPE_LONG);
-          if (trigIdx >= 0) {
-            buttonDebouncers[i].longPressed = 1;   // fire only once per press
-            performCommand(triggerEntries[trigIdx].mode, triggerEntries[trigIdx].value,
-                           getTriggerKeystring(trigIdx), 1);
-          } else {
-            buttonDebouncers[i].longPressed = 1;   // no trigger defined: suppress repeated checks
+        // Check if any long-press trigger is configured for this button.
+        // If yes, processLongPressTriggers handles timing and deferred firing — skip here.
+        // If no trigger exists at any duration, suppress repeated polling via longPressed.
+        bool anyLongThreshold = false;
+        uint32_t heldFor = (uint32_t)(millis() - buttonDebouncers[i].timestamp);
+        for (int j = 0; j < MAX_TRIGGER_COUNT; j++) {
+          if (triggerEntries[j].termCount == 0) continue;
+          for (uint8_t t = 0; t < triggerEntries[j].termCount; t++) {
+            if (triggerEntries[j].terms[t].buttonIndex == (uint8_t)i &&
+                triggerEntries[j].terms[t].triggerType == TRIGGER_TYPE_LONG) {
+              uint32_t dur = triggerEntries[j].terms[t].duration;
+              if (dur == 0) dur = globalSettings.thresholdLongPress;
+              if (dur > 0 && heldFor >= dur) { anyLongThreshold = true; }
+            }
           }
+        }
+        if (!anyLongThreshold && globalSettings.thresholdLongPress > 0 &&
+            heldFor >= globalSettings.thresholdLongPress &&
+            !hasTriggerTerm((uint8_t)i, TRIGGER_TYPE_LONG)) {
+          // No trigger configured: suppress repeated checks only
+          buttonDebouncers[i].longPressed = 1;
         }
       }
     }
@@ -769,6 +839,8 @@ void initDebouncers()
     buttonDebouncers[i].multiPending  = 0;
     normalActionStarted[i] = 0;
     pendingDoubleEventEmitted[i] = 0;
+    pendingLongTrigIdx[i] = -1;
+    pendingLongEmittedDuration[i] = 0;
   }
   for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
     sequenceProgress[i] = 0;
