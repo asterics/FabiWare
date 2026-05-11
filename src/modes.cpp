@@ -23,26 +23,12 @@
 /**
    static variables for mode handling
  * */
-uint8_t strongSipPuffState = STRONG_MODE_IDLE;
+// Note: Gesture handling (strongSipPuffState) removed in Phase 3
 
 /**
    forward declarations of module-internal functions
 */
-void handleMovement(); 
-
-bool noStrongPuffSpecialActions() {
-  return ( (buttons[STRONGPUFF_UP_BUTTON].mode == CMD_NC) &&
-           (buttons[STRONGPUFF_DOWN_BUTTON].mode == CMD_NC) &&
-           (buttons[STRONGPUFF_LEFT_BUTTON].mode == CMD_NC) &&
-           (buttons[STRONGPUFF_RIGHT_BUTTON].mode == CMD_NC));
-}
-
-bool noStrongSipSpecialActions() {
-  return ( (buttons[STRONGSIP_UP_BUTTON].mode == CMD_NC) &&
-           (buttons[STRONGSIP_DOWN_BUTTON].mode == CMD_NC) &&
-           (buttons[STRONGSIP_LEFT_BUTTON].mode == CMD_NC) &&
-           (buttons[STRONGSIP_RIGHT_BUTTON].mode == CMD_NC));
-}
+void handleMovement();
 
 void handleUserInteraction()
 {
@@ -51,8 +37,9 @@ void handleUserInteraction()
   static int waitStable = 0;
   static int checkPairing = 0;
   static uint8_t puffState = SIP_PUFF_STATE_IDLE, sipState = SIP_PUFF_STATE_IDLE;
+  static uint8_t strongPuffState = SIP_PUFF_STATE_IDLE, strongSipState = SIP_PUFF_STATE_IDLE;
   static uint8_t puffCount = 0, sipCount = 0;
-  int strongDirThreshold;
+  static uint8_t strongPuffCount = 0, strongSipCount = 0;
 
   // handle button press and release actions
   for (int i = 0; i < NUMBER_OF_PHYSICAL_BUTTONS; i++) { // update button press / release events
@@ -111,144 +98,8 @@ void handleUserInteraction()
   if (currentState.pressure < previousPressure) pressureFalling = 1; else pressureFalling = 0;
   previousPressure = currentState.pressure;
 
-  if (slotSettings.stickMode == STICKMODE_ALTERNATIVE)
-    strongDirThreshold = 0;
-  else strongDirThreshold = STRONGMODE_MOUSE_JOYSTICK_THRESHOLD;
-
-  // handle strong sip and puff actions
-  switch (strongSipPuffState)  {
-
-    case STRONG_MODE_IDLE:   // IDLE
-      if (currentState.pressure > slotSettings.sp) {
-        strongSipPuffState = STRONG_MODE_ENTER_STRONGPUFF;
-        makeTone(TONE_ENTER_STRONGPUFF, 0 );
-      }
-      if (currentState.pressure < slotSettings.ss ) {
-        strongSipPuffState = STRONG_MODE_ENTER_STRONGSIP;
-        makeTone(TONE_ENTER_STRONGSIP, 0 );
-      }
-      break;
-
-    case STRONG_MODE_ENTER_STRONGPUFF:     // puffed strong, wait for release
-      if (currentState.pressure < slotSettings.tp)
-        waitStable++;
-      else waitStable = 0;
-      if (waitStable >= STRONGMODE_STABLETIME) {
-        if (noStrongPuffSpecialActions()) {
-          handlePress(STRONGPUFF_BUTTON);
-          handleRelease(STRONGPUFF_BUTTON);
-          strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
-          waitStable = 0;
-        } else strongSipPuffState = STRONG_MODE_STRONGPUFF_ACTIVE;
-      }
-      break;
-
-    case STRONG_MODE_STRONGPUFF_ACTIVE:    // strong puff mode active
-      if (currentState.y < -strongDirThreshold) {
-        makeTone(TONE_EXIT_STRONGPUFF, 0 );
-        handlePress(STRONGPUFF_UP_BUTTON); handleRelease(STRONGPUFF_UP_BUTTON);
-        strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
-        waitStable = 0;
-      }
-      else if (currentState.x < -strongDirThreshold) {
-        makeTone(TONE_EXIT_STRONGPUFF, 0 );
-        handlePress(STRONGPUFF_LEFT_BUTTON); handleRelease(STRONGPUFF_LEFT_BUTTON);
-        strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
-        waitStable = 0;
-      }
-      else if (currentState.x > strongDirThreshold) {
-        makeTone(TONE_EXIT_STRONGPUFF, 0 );
-        handlePress(STRONGPUFF_RIGHT_BUTTON); handleRelease(STRONGPUFF_RIGHT_BUTTON);
-        strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
-        waitStable = 0;
-      }
-      else if (currentState.y > strongDirThreshold) {
-        makeTone(TONE_EXIT_STRONGPUFF, 0 );
-        handlePress(STRONGPUFF_DOWN_BUTTON); handleRelease(STRONGPUFF_DOWN_BUTTON);
-        strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
-        waitStable = 0;
-      }
-      else {
-        waitStable++;
-        if (waitStable > STRONGMODE_EXIT_TIME) { // no stick movement occurred: perform strong puff action
-          waitStable = 0;
-          handlePress(STRONGPUFF_BUTTON);
-          handleRelease(STRONGPUFF_BUTTON);
-          strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
-        }
-      }
-      break;
-
-    case STRONG_MODE_ENTER_STRONGSIP:   // sipped strong, wait for release
-      if (currentState.pressure > slotSettings.ts)
-        waitStable++;
-      else waitStable = 0;
-      if (waitStable >= STRONGMODE_STABLETIME) {
-        if (noStrongSipSpecialActions()) {
-          handlePress(STRONGSIP_BUTTON);
-          handleRelease(STRONGSIP_BUTTON);
-          strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
-          waitStable = 0;
-        } 
-        else strongSipPuffState = STRONG_MODE_STRONGSIP_ACTIVE;
-      }
-      break;
-
-    case STRONG_MODE_STRONGSIP_ACTIVE:   // strong sip mode active
-      if (currentState.y < -strongDirThreshold) {
-        makeTone(TONE_EXIT_STRONGSIP, 0 );
-        handlePress(STRONGSIP_UP_BUTTON); handleRelease(STRONGSIP_UP_BUTTON);
-        strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
-        waitStable = 0;
-      }
-      else if (currentState.x < -strongDirThreshold) {
-        makeTone(TONE_EXIT_STRONGSIP, 0 );
-        handlePress(STRONGSIP_LEFT_BUTTON); handleRelease(STRONGSIP_LEFT_BUTTON);
-        strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
-        waitStable = 0;
-      }
-      else if (currentState.x > strongDirThreshold) {
-        makeTone(TONE_EXIT_STRONGSIP, 0 );
-        handlePress(STRONGSIP_RIGHT_BUTTON); handleRelease(STRONGSIP_RIGHT_BUTTON);
-        strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
-        waitStable = 0;
-      }
-      else if (currentState.y > strongDirThreshold) {
-        makeTone(TONE_EXIT_STRONGSIP, 0 );
-        handlePress(STRONGSIP_DOWN_BUTTON); handleRelease(STRONGSIP_DOWN_BUTTON);
-        strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
-        waitStable = 0;
-      }
-      else {
-        waitStable++;
-        if (waitStable > STRONGMODE_EXIT_TIME) {  // no stick movement occurred: perform strong sip action
-          waitStable = 0;
-          handlePress(STRONGSIP_BUTTON);
-          handleRelease(STRONGSIP_BUTTON);
-          strongSipPuffState = STRONG_MODE_RETURN_TO_IDLE;
-        }
-      }
-      break;
-
-    case STRONG_MODE_RETURN_TO_IDLE:
-      waitStable++;
-      if (waitStable > STRONGMODE_IDLE_TIME)
-      {
-        waitStable = 0;
-        strongSipPuffState = STRONG_MODE_IDLE;
-        initDebouncers();
-        puffState = 0; sipState = 0;
-      }
-      break;
-    default: break;
-  }
-
-
-  if (strongSipPuffState == STRONG_MODE_IDLE)
-  {
-
-    //handle normal sip and puff actions
-    switch (puffState)  {
+  // handle normal sip and puff actions
+  switch (puffState)  {
       case SIP_PUFF_STATE_IDLE:
         if (currentState.pressure > slotSettings.tp)   // handle single puff actions
         {
@@ -306,9 +157,70 @@ void handleUserInteraction()
         }
     }
 
+    // handle strong puff actions
+    switch (strongPuffState) {
+      case SIP_PUFF_STATE_IDLE:
+        if (currentState.pressure > slotSettings.sp)
+        {
+          strongPuffState = SIP_PUFF_STATE_STARTED;
+          strongPuffCount = 0;
+        }
+        break;
+
+      case SIP_PUFF_STATE_STARTED:
+        if (!pressureRising)
+        {
+          if (strongPuffCount++ > SIP_PUFF_SETTLE_TIME)
+          {
+            strongPuffCount = MIN_HOLD_TIME;
+            handlePress(STRONGPUFF_BUTTON);
+            strongPuffState = SIP_PUFF_STATE_PRESSED;
+          }
+        } else if (strongPuffCount) strongPuffCount--;
+        break;
+
+      case SIP_PUFF_STATE_PRESSED:
+        if (strongPuffCount) strongPuffCount--;
+        if ((currentState.pressure < slotSettings.sp) && (!strongPuffCount)) {
+          handleRelease(STRONGPUFF_BUTTON);
+          strongPuffState = SIP_PUFF_STATE_IDLE;
+        }
+        break;
+    }
+
+    // handle strong sip actions
+    switch (strongSipState) {
+      case SIP_PUFF_STATE_IDLE:
+        if (currentState.pressure < slotSettings.ss)
+        {
+          strongSipState = SIP_PUFF_STATE_STARTED;
+          strongSipCount = 0;
+        }
+        break;
+
+      case SIP_PUFF_STATE_STARTED:
+        if (!pressureFalling)
+        {
+          if (strongSipCount++ > SIP_PUFF_SETTLE_TIME)
+          {
+            strongSipCount = MIN_HOLD_TIME;
+            handlePress(STRONGSIP_BUTTON);
+            strongSipState = SIP_PUFF_STATE_PRESSED;
+          }
+        } else if (strongSipCount) strongSipCount--;
+        break;
+
+      case SIP_PUFF_STATE_PRESSED:
+        if (strongSipCount) strongSipCount--;
+        if ((currentState.pressure > slotSettings.ss) && (!strongSipCount)) {
+          handleRelease(STRONGSIP_BUTTON);
+          strongSipState = SIP_PUFF_STATE_IDLE;
+        }
+        break;
+    }
+
     // now handle stick movements!
     handleMovement();
-  }
 }
 
 /**

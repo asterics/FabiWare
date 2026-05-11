@@ -144,7 +144,7 @@ void processLongPressTriggers();
 
 /**
    @name processMultiPressTriggers
-   @brief resolves pending single/double/triple actions after multi-press timeout
+   @brief resolves pending tap-count actions after multi-press timeout
    @return none
 */
 void processMultiPressTriggers();

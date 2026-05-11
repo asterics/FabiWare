@@ -4,17 +4,23 @@
 
   Module: triggers.h - header for the complex trigger system (AT TG command)
 
-  The trigger system allows mapping complex input gestures (long press, double press,
-  triple press) of any button to additional actions, independent of the button's
+   The trigger system allows mapping complex input gestures (press/release edges,
+   tap counts, and long press) of any button to additional actions, independent of the button's
   primary action.
 
-  Usage (AT command interface, two-step like AT BM):
-    AT TG long(B1)       -> next AT command stored as long-press action for button 1
-    AT TG double(sip)    -> next AT command stored as double-press action for sip
-    AT TG triple(puff)   -> next AT command stored as triple-press action for puff
-    AT TG list           -> list all active trigger definitions
-    AT TG clear          -> remove all trigger definitions
-    AT TG clear(B1)      -> remove all trigger definitions for button B1
+  Usage (inline format, single command line):
+    AT TG press(B1), KP KEY_A      -> press B1 triggers KEY_A
+   AT TG tap(B1), KW hello          -> single tap B1 triggers hello
+   AT TG tap(B1,1), KW hello        -> same as tap(B1)
+   AT TG tap(B1,2), CL              -> double tap B1 triggers click left
+   AT TG tap(B1,3), CR              -> triple tap B1 triggers click right
+    AT TG release(sip), KP KEY_ESC  -> release sip triggers ESC
+    AT TG long(B3,2000), CW         -> hold B3 for 2sec triggers wheel up (custom duration)
+    AT TG tap(B1,2)+long(B3), KP KEY_ENTER  -> composite: double B1, then hold B3
+    AT TG list                      -> list all active trigger definitions
+    AT TG clear                     -> remove all trigger definitions
+    AT TG clear(B1)                 -> remove all trigger definitions for button B1
+    AT TG clear(3)                  -> remove the 3rd trigger in the list
 
   Supported button names:
     B1..B5 (physical buttons), up, down, left, right,
@@ -32,9 +38,9 @@
     long-press trigger action fires additionally.
 
   Multi-press behavior (additive):
-    The button's normal action fires on every press (unchanged).
-    On the 2nd press within thresholdMultiPress ms the double-press trigger fires.
-    On the 3rd press within thresholdMultiPress ms the triple-press trigger fires.
+      tap(button) and tap(button,1) are equivalent.
+      tap(button,2) fires on the 2nd press within thresholdMultiPress ms.
+      tap(button,3) fires on the 3rd press within thresholdMultiPress ms.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -47,19 +53,20 @@
 #include <Arduino.h>
 
 // Trigger type identifiers
-#define TRIGGER_TYPE_SINGLE  0  // single press
-#define TRIGGER_TYPE_LONG    1  // long press
-#define TRIGGER_TYPE_DOUBLE  2  // double press
-#define TRIGGER_TYPE_TRIPLE  3  // triple press
+#define TRIGGER_TYPE_PRESS   0  // press: fires immediately on button press
+#define TRIGGER_TYPE_RELEASE 1  // release: fires immediately on button release
+#define TRIGGER_TYPE_TAP     2  // tap(count): press/release within multi-press window
+#define TRIGGER_TYPE_LONG    3  // long(duration): hold button for duration ms
 
-#define MAX_TRIGGER_COUNT              10   // maximum triggers per slot
-#define MAX_TRIGGER_KEYSTRING_BUFFER  150   // shared keystring storage (bytes)
+#define MAX_TRIGGER_COUNT              30   // maximum triggers per slot
+#define MAX_TRIGGER_KEYSTRING_BUFFER  400   // shared keystring storage (bytes)
 #define MAX_TRIGGER_TERMS               4   // maximum terms per trigger expression
 
 struct TriggerTerm {
-   uint8_t  triggerType;
+   uint8_t  triggerType;    // 0=press, 1=release, 2=tap, 3=long
    uint8_t  buttonIndex;
-   uint16_t duration;   // For TRIGGER_TYPE_LONG: custom hold time in ms (0 = use globalSettings.thresholdLongPress)
+   uint8_t  tapCount;       // For tap: 1-10, ignored for others
+   uint16_t duration;       // For long: custom hold time in ms (0 = use AT LP)
 };
 
 /**

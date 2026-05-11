@@ -94,8 +94,8 @@ struct GlobalSettings globalSettings {
   .buzzerMode=1,    // enable tone output via internal buzzer (1=tone height)
   .audioVolume=100,  // audio volume (0-200%, only applicable if AUDIO_SIGNAL_PIN defined)
   .thresholdAutoDwell=0,     // threshold time for automatic dwell-click (0=disabled)
-  .thresholdLongPress=0,     // threshold time for button long-press (0=disabled)
-  .thresholdMultiPress=0,    // threshold time for button multi-press (0=disabled)
+  .thresholdLongPress=1000,  // default long-press threshold (AT LP 1000)
+  .thresholdMultiPress=400,   // default multi-press threshold (AT MP 400)
 };
 
 struct CurrentState currentState {        

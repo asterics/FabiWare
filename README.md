@@ -44,157 +44,170 @@ Have a look at the [AsTeRICS Foundation homepage](https://www.asterics-foundatio
 
 # Complex Trigger System (AT TG Command)
 
-The FabiWare trigger system assigns actions to button gestures:
-- Long-press: hold a button for a configured time
-- Double-press: press twice inside the multi-press window
-- Triple-press: press three times inside the multi-press window
+The FabiWare trigger system lets you assign actions to rich button gestures — from a simple press or release, through multi-tap counts, to composite sequences that chain multiple buttons together.
 
-## Important Prerequisite: Enable Thresholds
+## Trigger Types
 
-Triggers are disabled while thresholds are `0`.
+There are four trigger types:
 
-```
-AT LP 1500    # long-press threshold in ms
-AT MP 400     # multi-press threshold in ms
-```
+| Type | Syntax | Fires when... |
+|------|--------|---------------|
+| `press` | `press(button)` | Button is pressed down (immediate) |
+| `release` | `release(button)` | Button is released (immediate) |
+| `tap` | `tap(button)` or `tap(button, N)` | Button is tapped N times within the multi-press window |
+| `long` | `long(button)` or `long(button, ms)` | Button is held for at least `ms` milliseconds (or `AT LP` threshold if omitted) |
 
-- `AT LP <ms>`: long-press threshold (`0` disables long-press triggers)
-- `AT MP <ms>`: multi-press threshold (`0` disables double/triple triggers)
+- N for `tap` can be 1–10. `tap(B1)` is equivalent to `tap(B1,1)`.
+- A `long` trigger with an explicit duration overrides the global `AT LP` threshold for that tier.
 
-## Basic Trigger Assignment (Two-Step)
+---
 
-`AT TG` works in two steps (similar to `AT BM`):
+## Enabling Thresholds
 
-1. Send trigger specification
-2. Send the action command to store
-
-The action is stored, not executed during assignment.
-
-### Basic Examples
+Triggers that rely on timing are disabled while the relevant threshold is `0`:
 
 ```
-# Long-press on B1
-AT LP 1500
-AT TG long(B1)
-AT KP KEY_A
-
-# Double-press on sip
-AT MP 400
-AT TG double(sip)
-AT CR
-
-# Triple-press on puff
-AT MP 400
-AT TG triple(puff)
-AT CL
+AT LP 1000    # long-press threshold in ms (default startup value)
+AT MP 400     # multi-press window in ms (required for tap(btn, N≥2) triggers)
 ```
 
-## Current Trigger Behavior
+- `AT LP <ms>`: long-press threshold — `0` disables long-press triggers
+- `AT MP <ms>`: multi-press window — `0` disables tap-count triggers and composite tap sequencing
+- Fresh default initialization uses `AT LP 1000` and `AT MP 400`.
 
-### Hierarchical multi-press resolution
+---
 
-If a button has double/triple triggers configured, the normal single action is deferred until the multi-press window closes.
+## Assigning Triggers
 
-- 1 press and timeout: normal single action executes
-- 2 presses in window: double trigger executes
-- 3 presses in window: triple trigger executes
+Specify the trigger condition and action on a single line, separated by a comma:
 
-Only one of these outcomes is selected for that press sequence.
+```
+AT TG <trigger_expression>, <AT command>
+```
 
-### Hold behavior and safety
+Examples:
 
-Hold-style normal actions (`KH`, `HL/HR/HM`, `PL/PR/PM`, joystick hold-style actions, etc.) are handled safely when double/triple triggers exist:
+```
+AT TG press(B1), KP KEY_A              # Press B1 → type KEY_A (fires on press, immediately)
+AT TG release(sip), CR                 # Release sip → right-click
+AT TG tap(B1), CL                      # Single tap on B1 → left-click
+AT TG tap(B1,2), KP KEY_ESC            # Double-tap B1 → ESC
+AT TG tap(sip,5), KW hello             # 5 rapid sips → type "hello"
+AT TG long(B1), NE                     # Hold B1 → next slot
+AT TG long(B1,2000), RA                # Hold B1 for 2 s → release all keys
+```
 
-- The normal hold action is delayed until it is clear no double/triple gesture will happen
-- If a long/double/triple trigger takes over, active hold state is released before the trigger action runs
-- Deferred hold actions are never left sticky; release is always enforced when transitioning between actions
+The action after the comma follows the same syntax as standalone `AT` commands (`KP`, `KW`, `KH`, `KR`, `CL`, `CR`, `CM`, `NE`, `RA`, `WA`, `MA`, `IR`, `WS`, `MX`, `MY`, etc.). `AT BM` is removed and cannot be used inside trigger actions.
+
+---
+
+## Multi-Tier Long-Press
+
+You can define multiple long-press tiers on the same button with different durations. Each tier fires exactly once as the button is held longer and longer:
+
+```
+AT LP 800
+
+AT TG long(B1,800),  KP KEY_A       # fires at 800 ms
+AT TG long(B1,1500), KP KEY_B       # fires at 1500 ms
+AT TG long(B1,3000), KP KEY_C       # fires at 3000 ms
+```
+
+- Shorter tiers fire as each threshold is crossed during the hold.
+- If the button is released before the next tier is crossed, the last-exceeded tier fires on release.
+
+---
 
 ## Composite Trigger Sequences
 
-You can chain multiple button presses together to create complex gesture sequences. Use the `+` operator to combine terms:
+Use `+` to chain multiple terms into a sequence. All terms must be satisfied in order within the multi-press window:
 
 ```
-AT TG term1+term2+term3...
+AT TG term1+term2[+term3...], <action>
 ```
 
-### Syntax
-
-Each term specifies a button and gesture type:
-
-- `single(buttonName)` - single press
-- `double(buttonName)` - two presses within the multi-press window
-- `triple(buttonName)` - three presses within the multi-press window
-- `long(buttonName)` - hold the button until the long-press timeout
-
-### Timing Rules
-
-The multi-press window (`AT MP`) applies **between consecutive button releases**:
-
-- After you release a button with its gesture complete, you have `AT MP` milliseconds to start the next button press
-- **Exception**: `long()` events are not subject to the MP timeout (they fire after a hold, then the next sequence term can begin)
-- The window is measured from when you release the previous button, not from when the gesture was recognized
-
-### Examples
+Examples:
 
 ```
-# Double-press B1, then single-press sip (within 400ms of releasing B1)
-AT MP 400
-AT TG double(B1)+single(sip)
-AT KP KEY_A
-
-# Double-press B1, then double-press sip (each gap within 400ms)
-AT MP 400
-AT TG double(B1)+double(sip)
-AT CL
-
-# Double-press B1, then hold B3 for 1500ms
 AT MP 400
 AT LP 1500
-AT TG double(B1)+long(B3)
-AT KP KEY_ENTER
 
-# Single up, double right, single sip (complex sequence)
-AT MP 400
-AT TG single(up)+double(right)+single(sip)
-AT CR
+# Double-tap B1, then single-tap sip (within 400 ms of releasing B1)
+AT TG tap(B1,2)+tap(sip), KP KEY_A
+
+# Double-tap B1, then hold B3 for 1500 ms
+AT TG tap(B1,2)+long(B3), KP KEY_ENTER
+
+# Press B1, then release B2 (immediate event types)
+AT TG press(B1)+release(B2), CL
+
+# Single up, double right, single sip (three-term chain)
+AT TG tap(up)+tap(right,2)+tap(sip), CR
 ```
 
-### Supported button combinations
+### Timing Rules for Sequences
 
-Any button name supported by `AT TG` can appear in a composite sequence. Combined direction buttons (`ssup`, `spdown`, etc.) remain excluded from triggers.
+- The multi-press window (`AT MP`) is measured **from when the preceding button is released**, giving natural reaction time.
+- `long()` terms are exempt from the MP timeout — they fire after a timed hold, then the next term window opens.
+- `press()` and `release()` terms are instantaneous and do not consume the MP window.
 
-## Supported Button Names for `AT TG`
+---
 
-You can assign triggers to:
+## Supported Button Names
 
-- Physical buttons: `B1`, `B2`, `B3`, `B4`, `B5`
-- Cursor buttons: `up`, `down`, `left`, `right`
-- Sip/Puff buttons: `sip`, `puff`, `strongsip`, `strongpuff`
+| Category | Names |
+|----------|-------|
+| Physical buttons | `B1` … `B9` |
+| Stick/cursor | `up`, `down`, `left`, `right` |
+| Sip & Puff | `sip`, `puff`, `strongsip`, `strongpuff` |
 
-The names below are still recognized, but trigger assignment is currently disabled for them:
+> **Note:** Directional gesture buttons (`ssup`, `ssdown`, `ssleft`, `ssright`, `spup`, `spdown`, `spleft`, `spright`) have been removed. Strong sip/puff is now a single event (`strongsip`, `strongpuff`) without gesture direction detection.
 
-- `ssup`, `ssdown`, `ssleft`, `ssright`
-- `spup`, `spdown`, `spleft`, `spright`
+---
 
-## Trigger Management Commands
+## Trigger Management
 
 ```
-AT TG list
-AT TG clear
-AT TG clear(B1)
+AT TG list           # Print all active triggers for the current slot
+AT TG clear          # Remove all triggers for the current slot
+AT TG clear(B1)      # Remove all triggers involving button B1
+AT TG clear(3)       # Remove the 3rd trigger by list position (1-based)
 ```
 
-## Notes on Saving/Loading Slots
+---
 
-Triggers are saved and restored with slots.
+## Hierarchical Press Resolution
 
-`AT TG clear` is intentionally written before saved trigger definitions so loading a slot first removes old triggers from the previously active slot.
+When a button has multiple tap-count triggers defined, resolution is deferred until the multi-press window closes so the most specific matching action is selected:
 
-## Minimal Troubleshooting
+- 1 press + timeout → `tap(btn)` / `tap(btn,1)` trigger
+- 2 presses in window → `tap(btn,2)` trigger
+- 3 presses in window → `tap(btn,3)` trigger
 
-- Triggers do not fire: ensure `AT LP`/`AT MP` are set to values greater than `0`
-- Trigger missing or wrong action: verify with `AT TG list` and reassign if needed
-- Multi-press not detected: increase `AT MP` if your press sequence is slower
+Hold-style actions (`KH`, `HL`/`HR`/`HM`, joystick hold, etc.) are always cleanly released before a trigger fires.
+
+`press()` and `release()` triggers bypass this deferral and fire immediately.
+
+---
+
+## Saving and Loading
+
+Triggers are saved and restored with slots. `AT TG clear` is written before trigger definitions when a slot is saved, so loading a slot cleanly replaces the previous slot's triggers.
+
+> **Breaking change (settings revision 3):** Slots saved with earlier firmware that still relied on `AT BM`, or were saved during the intermediate broken trigger-serialization revision, will not be loaded by this firmware. Re-configure and re-save slots using `AT TG` triggers.
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+|---------|-------------|
+| Triggers never fire | `AT LP` or `AT MP` is `0` — set them to nonzero values |
+| Wrong trigger fires | Check with `AT TG list`; reassign if needed |
+| Multi-tap not detected | Increase `AT MP` — your press sequence may be slower than the window |
+| Long-press fires too early / too late | Adjust `AT LP` or the explicit duration in `long(btn, ms)` |
+| Composite sequence misses a step | Increase `AT MP`; ensure you release the prior button before starting the next |
+
 
 # Links and Credits
 Most of this work has been accomplished at the UAS Technikum Wien in course of the R&D-projects [ToRaDes](https://embsys.technikum-wien.at/projects/torades/index.php) (MA23 project 18-04),

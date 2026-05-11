@@ -67,7 +67,7 @@
  
 // Optional Debug Output Control
 
-//#define DEBUG_OUTPUT_FULL      // if full debug output is desired
+#define DEBUG_OUTPUT_FULL      // if full debug output is desired
 //#define DEBUG_OUTPUT_MEMORY    // enables eeprom.cpp debugging, showing memory access
 //#define DEBUG_OUTPUT_KEYS      // enable keys.cpp debugging, showing key press/release events and keycode lookup
 //#define DEBUG_OUTPUT_IR      	 // enable infrared.cpp debugging, showing whats happening on IR recv/send

@@ -10,10 +10,8 @@
 
           AT                returns "OK"
           AT ID             returns identification string (e.g. "FABI v3.0")
-          AT BM <uint>      puts button into programming mode (e.g. "AT BM 2" -> next AT-command defines the new function for button 2)
-                            for the FlipMouse, there are 19 buttons available (3 physical buttons, 16 virtual functions)
-                            for FABI/FlipPad, there are 21 buttons available (5 physical buttons, 16 virtual functions)
-                            (see buttons.h)
+         AT BM             REMOVED: button mode assignment via AT BM is no longer supported.
+                           All button/input actions must be defined using AT TG (trigger system).
 
     USB HID commands:
 
@@ -122,19 +120,18 @@
           AT LP <int>     time threshold for long-press (e.g. "AT LP 1500" select the long-press-function of a button after 1500ms hold time, 0=disable)
           AT MP <int>     time threshold for multi-press (e.g. "AT MP 400" sets the threshold for time between multiple presses to 400 ms, 0=disable)
 
-    Complex trigger commands (AT TG) - two-step assignment like AT BM:
+    Complex trigger commands (AT TG) - inline trigger assignment:
 
-          AT TG long(<btn>)    puts system into trigger-assignment mode for a long-press trigger of <btn>.
-                               The next AT command defines the action fired when <btn> is held >= AT LP threshold.
-                               Example:  "AT TG long(B1)"  followed by  "AT KP KEY_A"
-          AT TG double(<btn>)  trigger-assignment mode for a double-press trigger.
-                               The next AT command fires on the 2nd consecutive press within AT MP threshold.
-                               Example:  "AT TG double(sip)"  followed by  "AT CR"
-          AT TG triple(<btn>)  trigger-assignment mode for a triple-press trigger.
-                               Example:  "AT TG triple(puff)"  followed by  "AT CL"
-          AT TG list           lists all currently active trigger definitions
-          AT TG clear          removes all trigger definitions
-          AT TG clear(<btn>)   removes all trigger definitions for the specified button
+          AT TG press(<btn>), <AT cmd>        fires on button rising edge
+          AT TG release(<btn>), <AT cmd>      fires on button falling edge
+          AT TG tap(<btn>), <AT cmd>          single tap, equivalent to tap(<btn>,1)
+          AT TG tap(<btn>,2), <AT cmd>        double tap within AT MP threshold
+          AT TG tap(<btn>,3), <AT cmd>        triple tap within AT MP threshold
+          AT TG long(<btn>), <AT cmd>         long press using AT LP threshold
+          AT TG long(<btn>,1500), <AT cmd>    long press with custom threshold
+          AT TG list                          lists all currently active trigger definitions
+          AT TG clear                         removes all trigger definitions
+          AT TG clear(<btn>)                  removes all trigger definitions for the specified button
 
           Supported button names for <btn>:
             B1..B5 (physical buttons), up, down, left, right,
@@ -147,9 +144,9 @@
             After AT LP ms while still held, the long-press trigger action fires additionally.
 
           Multi-press behavior (additive):
-            The button's normal action fires on every press (unchanged).
-            On the 2nd press within AT MP ms the double trigger fires additionally.
-            On the 3rd press within AT MP ms the triple trigger fires additionally.
+                                    tap(<btn>) and tap(<btn>,1) are equivalent.
+                                    tap(<btn>,2) fires on the 2nd press within AT MP ms.
+                                    tap(<btn>,3) fires on the 3rd press within AT MP ms.
             Setting the normal button action to AT NC makes it purely trigger-driven.
 
     Mode change and others:

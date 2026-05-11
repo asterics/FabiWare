@@ -87,40 +87,81 @@ const struct atCommandType atCommands[] PROGMEM = {
 const char ERRORMESSAGE_NOT_FOUND[] = "E: not found";
 const char ERRORMESSAGE_EEPROM_FULL[] = "E: eeprom full";
 
+static void trimInPlace(char *text)
+{
+  if (!text) return;
+
+  char *start = text;
+  while (*start == ' ' || *start == '\t' || *start == '\r' || *start == '\n') start++;
+  char *end = start + strlen(start);
+  while (end > start && (end[-1] == ' ' || end[-1] == '\t' || end[-1] == '\r' || end[-1] == '\n')) {
+    end--;
+  }
+  *end = 0;
+
+  if (start != text) memmove(text, start, (size_t)(end - start) + 1);
+}
+
 static bool parseTriggerTerm(char *term, struct TriggerTerm *out)
 {
   if (!term || !*term || !out) return false;
 
+  trimInPlace(term);
+
+  char *termEnd = term + strlen(term);
+  while (termEnd > term && (termEnd[-1] == ' ' || termEnd[-1] == '\t' || termEnd[-1] == '\r' || termEnd[-1] == '\n')) {
+    termEnd--;
+  }
+  *termEnd = 0;
+
   char *open = strchr(term, '(');
   char *close = open ? strchr(open + 1, ')') : nullptr;
-  if (!open || !close || close[1] != 0) return false;
+  if (!open || !close) return false;
+
+  char *tail = close + 1;
+  while (*tail == ' ' || *tail == '\t' || *tail == '\r' || *tail == '\n') tail++;
+  if (*tail != 0) return false;
 
   *open = 0;
   *close = 0;
 
+  trimInPlace(term);
+
   uint8_t trigType = 0xFF;
-  if      (strcasecmp(term, "single") == 0) trigType = TRIGGER_TYPE_SINGLE;
-  else if (strcasecmp(term, "long")   == 0) trigType = TRIGGER_TYPE_LONG;
-  else if (strcasecmp(term, "double") == 0) trigType = TRIGGER_TYPE_DOUBLE;
-  else if (strcasecmp(term, "triple") == 0) trigType = TRIGGER_TYPE_TRIPLE;
+  uint8_t tapCount = 1;
+  uint16_t customDuration = 0;
+
+  // Parse trigger type
+  if      (strcasecmp(term, "press")   == 0) trigType = TRIGGER_TYPE_PRESS;
+  else if (strcasecmp(term, "release") == 0) trigType = TRIGGER_TYPE_RELEASE;
+  else if (strcasecmp(term, "tap")     == 0) trigType = TRIGGER_TYPE_TAP;
+  else if (strcasecmp(term, "long")    == 0) trigType = TRIGGER_TYPE_LONG;
   else return false;
 
-  // For long(B1,1000): check for optional duration after a comma inside the parentheses
   char *content = open + 1;
-  uint16_t customDuration = 0;
-  if (trigType == TRIGGER_TYPE_LONG) {
-    char *comma = strchr(content, ',');
-    if (comma) {
-      *comma = 0;
-      customDuration = (uint16_t)atoi(comma + 1);
+  char *comma = strchr(content, ',');
+
+  // Parse optional parameter (tap count or duration)
+  if (comma) {
+    *comma = 0;
+    trimInPlace(content);
+    uint16_t param = (uint16_t)atoi(comma + 1);
+    if (trigType == TRIGGER_TYPE_TAP) {
+      if (param < 1 || param > 10) return false;
+      tapCount = (uint8_t)param;
+    } else if (trigType == TRIGGER_TYPE_LONG) {
+      customDuration = param;
     }
   }
+
+  trimInPlace(content);
 
   int8_t btnIdx = parseButtonName(content);
   if (btnIdx < 0 || !isTriggerSupportedButton((uint8_t)btnIdx)) return false;
 
   out->triggerType = trigType;
   out->buttonIndex = (uint8_t)btnIdx;
+  out->tapCount    = tapCount;
   out->duration    = customDuration;
   return true;
 }
@@ -129,23 +170,107 @@ static bool parseTriggerExpression(char *expr, struct TriggerTerm *terms, uint8_
 {
   if (!expr || !*expr || !terms || !termCount) return false;
 
+  trimInPlace(expr);
+
   *termCount = 0;
   char *p = expr;
   while (p && *p) {
     if (*termCount >= MAX_TRIGGER_TERMS) return false;
 
     char *plus = strchr(p, '+');
-    if (plus) *plus = 0;
+    if (plus) {
+      *plus = 0;
+      char *next = plus + 1;
+      trimInPlace(next);
+      p = next;
+    }
 
     if (!parseTriggerTerm(p, &terms[*termCount])) return false;
     (*termCount)++;
 
     if (!plus) break;
-    p = plus + 1;
   }
 
   return (*termCount > 0);
 }
+
+static char *findTopLevelComma(char *text)
+{
+  if (!text) return nullptr;
+
+  int depth = 0;
+  for (char *p = text; *p; p++) {
+    if (*p == '(') {
+      depth++;
+    } else if (*p == ')') {
+      if (depth > 0) depth--;
+    } else if (*p == ',' && depth == 0) {
+      return p;
+    }
+  }
+
+  return nullptr;
+}
+
+// Parse an inline action command like "KP KEY_A" or "CL" and return command code, parameter, and keystring
+static bool parseInlineActionCommand(char *cmdStr, uint8_t *outCmd, int16_t *outParam, char *outKeystring, uint16_t maxLen)
+{
+  if (!cmdStr || !*cmdStr || !outCmd || !outParam || !outKeystring) return false;
+  
+  // Extract command (first 2 chars, trimming whitespace)
+  char cmdCode[3] = {0};
+  int cmdLen = 0;
+  for (int i = 0; i < 2 && *cmdStr && *cmdStr != ' '; i++, cmdStr++) {
+    cmdCode[cmdLen++] = *cmdStr;
+  }
+  
+  // Trim whitespace after command
+  while (*cmdStr == ' ') cmdStr++;
+  
+  // Find command in atCommands array
+  bool found = false;
+  uint8_t cmdIdx = 0;
+  for (int i = 0; i < NUM_COMMANDS; i++) {
+    char atmCmd[3];
+    strcpy_FM(atmCmd, (uint_farptr_t_FM)atCommands[i].atCmd);
+    if (strcasecmp(atmCmd, cmdCode) == 0) {
+      found = true;
+      cmdIdx = i;
+      break;
+    }
+  }
+  
+  if (!found) return false;
+  
+  *outCmd = cmdIdx;
+  *outParam = 0;
+  outKeystring[0] = 0;
+  
+  uint8_t parType = pgm_read_byte_near(&(atCommands[cmdIdx].partype));
+  switch (parType) {
+    case PARTYPE_NONE:
+      // No parameter expected
+      return true;
+    case PARTYPE_UINT:
+    case PARTYPE_INT:
+      // Parse numeric parameter
+      if (*cmdStr == 0) return false;  // Parameter required but missing
+      *outParam = (int16_t)atoi(cmdStr);
+      return true;
+    case PARTYPE_STRING:
+      // Rest of string is the parameter
+      if (*cmdStr == 0) {
+        outKeystring[0] = 0;  // Allow empty string parameter
+      } else {
+        strncpy(outKeystring, cmdStr, maxLen - 1);
+        outKeystring[maxLen - 1] = 0;
+      }
+      return true;
+    default:
+      return false;
+  }
+}
+
 
 
 /**
@@ -159,46 +284,13 @@ static bool parseTriggerExpression(char *expr, struct TriggerTerm *terms, uint8_
 */
 void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodicMouseMovement)
 {
-  static uint8_t actButton = 0;        // button number for AT BM assignment (1-based; 0 = inactive)
-  static struct TriggerTerm pendingTriggerTerms[MAX_TRIGGER_TERMS];
-  static uint8_t pendingTriggerTermCount = 0;
-
-  // If the previous command was AT TG <spec>: store the current command as trigger action.
-  if (pendingTriggerTermCount != 0) {
-    if (addOrReplaceTriggerSequence(pendingTriggerTerms, pendingTriggerTermCount,
-                                    cmd, par1, keystring ? keystring : "") < 0) {
-      Serial.println("?");
-    }
-    pendingTriggerTermCount = 0;
-    return;
-  }
-
-  if (actButton != 0)  // if last command was BM (set buttonmode): store current command for this button !!
-  {
-#ifdef DEBUG_OUTPUT_FULL
-    DEBUG_OUT.print("got new mode for button "); DEBUG_OUT.print(actButton); DEBUG_OUT.print(":");
-    DEBUG_OUT.print(cmd); DEBUG_OUT.print(","); DEBUG_OUT.print(par1); DEBUG_OUT.print(","); DEBUG_OUT.println(keystring);
-#endif
-    buttons[actButton - 1].mode = cmd;
-    buttons[actButton - 1].value = par1;
-    setButtonKeystring(actButton - 1, keystring);
-    actButton = 0;
-    return;  // do not actually execute the command (just store it)
-  }
-
   switch (cmd) {
     case CMD_ID:
       reportCapabilities (CAP_ALL);
       break;
 
     case CMD_BM:
-      release_all();
-#ifdef DEBUG_OUTPUT_FULL
-      DEBUG_OUT.print("set mode for button "); DEBUG_OUT.println(par1);
-#endif
-      if ((par1 > 0) && (par1 <= NUMBER_OF_BUTTONS))
-        actButton = par1;
-      else  Serial.println("?");
+      Serial.println("?"); // AT BM removed: use AT TG instead
       break;
 
     case CMD_CL:
@@ -320,18 +412,57 @@ void performCommand (uint8_t cmd, int16_t par1, char * keystring, int8_t periodi
         break;
       }
 
-      // AT TG <expr> where <expr> = term [+ term ...]
-      // term = single(<btn>) | long(<btn>) | double(<btn>) | triple(<btn>)
-      struct TriggerTerm parsedTerms[MAX_TRIGGER_TERMS];
-      uint8_t parsedCount = 0;
-      if (parseTriggerExpression(keystring, parsedTerms, &parsedCount)) {
-        for (uint8_t i = 0; i < parsedCount; i++) {
-          pendingTriggerTerms[i] = parsedTerms[i];
+      // AT TG <expr> [, <action>]
+      // Check for inline action (comma separator)
+      char *commaPos = findTopLevelComma(keystring);
+      if (commaPos) {
+        // Inline action format: AT TG tap(B1,2), KP KEY_A
+        char triggerExpr[256];
+        char actionStr[256];
+        uint32_t trigLen = (commaPos - keystring);
+        if (trigLen >= sizeof(triggerExpr) - 1) {
+          Serial.println("?");
+          break;
         }
-        pendingTriggerTermCount = parsedCount;
-      } else {
-        Serial.println("?");
+        strncpy(triggerExpr, keystring, trigLen);
+        triggerExpr[trigLen] = 0;
+        
+        // Trim whitespace from action string
+        char *actionPtr = commaPos + 1;
+        while (*actionPtr == ' ') actionPtr++;
+        strncpy(actionStr, actionPtr, sizeof(actionStr) - 1);
+        actionStr[sizeof(actionStr) - 1] = 0;
+        
+        // Parse trigger expression
+        struct TriggerTerm parsedTerms[MAX_TRIGGER_TERMS];
+        uint8_t parsedCount = 0;
+        if (!parseTriggerExpression(triggerExpr, parsedTerms, &parsedCount)) {
+          Serial.println("?");
+          break;
+        }
+        
+        // Parse action command
+        uint8_t actionCmd = 0;
+        int16_t actionParam = 0;
+        char actionKeystring[MAX_KEYSTRINGBUFFER_LEN] = {0};
+        if (!parseInlineActionCommand(actionStr, &actionCmd, &actionParam, actionKeystring, sizeof(actionKeystring))) {
+          Serial.println("?");
+          break;
+        }
+        
+        // Store trigger with action directly
+        if (addOrReplaceTriggerSequence(parsedTerms, parsedCount,
+                                        actionCmd, actionParam,
+                                        actionKeystring) < 0) {
+          Serial.println("?");
+        } else {
+          Serial.println("OK");
+        }
+        break;
       }
+
+      // No comma found: trigger expression without inline action — not supported
+      Serial.println("?");
       break;
     }
     case CMD_J0:

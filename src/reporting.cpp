@@ -80,31 +80,6 @@ void printCurrentSlot(Stream *S)
   S->print("AT KL "); S->println(slotSettings.kbdLayout);
   S->print("AT SC "); makehex(slotSettings.sc, tmp); S->println(tmp);
 
-  for (int i = 0; i < NUMBER_OF_BUTTONS; i++)
-  {
-    S->print("AT BM ");
-    if (i < 9) S->print("0"); // leading zero for button numbers !
-    S->println(i + 1);
-    int actCmd = buttons[i].mode;
-    char cmdStr[4];
-
-    if ((actCmd <0 ) || (actCmd>=NUM_COMMANDS)) {
-      S->print("E: buttonmode =");
-      S->println(actCmd);
-      actCmd=CMD_NC;
-    }
-    
-    S->print("AT ");
-    strcpy_FM(cmdStr, (uint_farptr_t_FM)atCommands[actCmd].atCmd);
-    S->print(cmdStr);
-    switch (pgm_read_byte_near(&(atCommands[actCmd].partype)))
-    {
-      case PARTYPE_UINT:
-      case PARTYPE_INT:  S->print(" "); S->print(buttons[i].value); break;
-      case PARTYPE_STRING: S->print(" "); S->print(buttonKeystrings[i]); break;
-    }
-    S->println("");
-  }
   printTriggersForSlot(S);
   S->flush();
 }

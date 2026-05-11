@@ -723,5 +723,5 @@ void printAllSlots(void) {
 uint8_t getSettingsRevision(void)
 {
 	//TODO: implement revisions (or use the first folder name for something different)
-	return 1;
+  return 3;  // bumped from 2: abandon /002/ files saved in broken two-step trigger format
 }

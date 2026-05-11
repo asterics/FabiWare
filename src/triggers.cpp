@@ -92,6 +92,7 @@ static bool sameTriggerSpec(const struct TriggerTerm *a, uint8_t ac,
   for (uint8_t i = 0; i < ac; i++) {
     if (a[i].buttonIndex != b[i].buttonIndex ||
         a[i].triggerType != b[i].triggerType ||
+        a[i].tapCount    != b[i].tapCount ||
         a[i].duration    != b[i].duration)
       return false;
   }
@@ -219,11 +220,11 @@ bool isTriggerSupportedButton(uint8_t idx)
 const char *triggerTypeName(uint8_t type)
 {
   switch (type) {
-    case TRIGGER_TYPE_SINGLE: return "single";
-    case TRIGGER_TYPE_LONG:   return "long";
-    case TRIGGER_TYPE_DOUBLE: return "double";
-    case TRIGGER_TYPE_TRIPLE: return "triple";
-    default:                  return "?";
+    case TRIGGER_TYPE_PRESS:   return "press";
+    case TRIGGER_TYPE_RELEASE: return "release";
+    case TRIGGER_TYPE_TAP:     return "tap";
+    case TRIGGER_TYPE_LONG:    return "long";
+    default:                   return "?";
   }
 }
 
@@ -275,14 +276,7 @@ const char *buttonIndexName(uint8_t idx)
     case PUFF_BUTTON:            return "puff";
     case STRONGSIP_BUTTON:       return "strongsip";
     case STRONGPUFF_BUTTON:      return "strongpuff";
-    case STRONGSIP_UP_BUTTON:    return "ssup";
-    case STRONGSIP_DOWN_BUTTON:  return "ssdown";
-    case STRONGSIP_LEFT_BUTTON:  return "ssleft";
-    case STRONGSIP_RIGHT_BUTTON: return "ssright";
-    case STRONGPUFF_UP_BUTTON:   return "spup";
-    case STRONGPUFF_DOWN_BUTTON: return "spdown";
-    case STRONGPUFF_LEFT_BUTTON: return "spleft";
-    case STRONGPUFF_RIGHT_BUTTON:return "spright";
+    // Gesture buttons (ssup, ssdown, ssleft, ssright, spup, spdown, spleft, spright) removed in Phase 3
     default: {
       static char unk[6];
       snprintf(unk, sizeof(unk), "B%u", idx);
@@ -311,14 +305,7 @@ int8_t parseButtonName(const char *name)
   if (strcasecmp(name, "puff")        == 0) return (int8_t)PUFF_BUTTON;
   if (strcasecmp(name, "strongsip")   == 0) return (int8_t)STRONGSIP_BUTTON;
   if (strcasecmp(name, "strongpuff")  == 0) return (int8_t)STRONGPUFF_BUTTON;
-  if (strcasecmp(name, "ssup")        == 0) return (int8_t)STRONGSIP_UP_BUTTON;
-  if (strcasecmp(name, "ssdown")      == 0) return (int8_t)STRONGSIP_DOWN_BUTTON;
-  if (strcasecmp(name, "ssleft")      == 0) return (int8_t)STRONGSIP_LEFT_BUTTON;
-  if (strcasecmp(name, "ssright")     == 0) return (int8_t)STRONGSIP_RIGHT_BUTTON;
-  if (strcasecmp(name, "spup")        == 0) return (int8_t)STRONGPUFF_UP_BUTTON;
-  if (strcasecmp(name, "spdown")      == 0) return (int8_t)STRONGPUFF_DOWN_BUTTON;
-  if (strcasecmp(name, "spleft")      == 0) return (int8_t)STRONGPUFF_LEFT_BUTTON;
-  if (strcasecmp(name, "spright")     == 0) return (int8_t)STRONGPUFF_RIGHT_BUTTON;
+  // Gesture buttons (ssup, ssdown, ssleft, ssright, spup, spdown, spleft, spright) removed in Phase 3
 
   return -1;
 }
@@ -340,7 +327,10 @@ void listTriggers()
       Serial.print(triggerTypeName(tm->triggerType));
       Serial.print("(");
       Serial.print(buttonIndexName(tm->buttonIndex));
-      if (tm->triggerType == TRIGGER_TYPE_LONG && tm->duration > 0) {
+      if (tm->triggerType == TRIGGER_TYPE_TAP && tm->tapCount > 1) {
+        Serial.print(",");
+        Serial.print(tm->tapCount);
+      } else if (tm->triggerType == TRIGGER_TYPE_LONG && tm->duration > 0) {
         Serial.print(",");
         Serial.print(tm->duration);
       }
@@ -375,7 +365,9 @@ void printTriggersForSlot(Stream *S)
     int actCmd = triggerEntries[i].mode;
     if (actCmd < 0 || actCmd >= NUM_COMMANDS) continue;
 
-    // Step 1: trigger spec
+    // Inline format: AT TG <trigger_spec>, <CMD> [params]
+    // This ensures the line is stored as a trigger entry when loaded,
+    // rather than executing the action command immediately.
     S->print("AT TG ");
     for (uint8_t t = 0; t < triggerEntries[i].termCount; t++) {
       if (t) S->print("+");
@@ -383,23 +375,29 @@ void printTriggersForSlot(Stream *S)
       S->print(triggerTypeName(tm->triggerType));
       S->print("(");
       S->print(buttonIndexName(tm->buttonIndex));
-      if (tm->triggerType == TRIGGER_TYPE_LONG && tm->duration > 0) {
+      if (tm->triggerType == TRIGGER_TYPE_TAP && tm->tapCount > 1) {
+        S->print(",");
+        S->print(tm->tapCount);
+      } else if (tm->triggerType == TRIGGER_TYPE_LONG && tm->duration > 0) {
         S->print(",");
         S->print(tm->duration);
       }
       S->print(")");
     }
-    S->println("");
 
-    // Step 2: action command
+    // Comma separator then the action command (no "AT " prefix — inline parser expects just "CMD params")
+    S->print(", ");
     char cmdStr[4];
     strcpy_FM(cmdStr, (uint_farptr_t_FM)atCommands[actCmd].atCmd);
-    S->print("AT ");
     S->print(cmdStr);
     switch (pgm_read_byte_near(&(atCommands[actCmd].partype))) {
       case PARTYPE_UINT:
       case PARTYPE_INT:    S->print(" "); S->print(triggerEntries[i].value);         break;
-      case PARTYPE_STRING: S->print(" "); S->print(getTriggerKeystring((int8_t)i));  break;
+      case PARTYPE_STRING: {
+        const char *ks = getTriggerKeystring((int8_t)i);
+        if (ks && *ks) { S->print(" "); S->print(ks); }
+        break;
+      }
       default: break;
     }
     S->println("");
