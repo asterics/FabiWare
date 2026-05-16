@@ -66,6 +66,18 @@ static bool emitTriggerEvent(uint8_t buttonIndex, uint8_t triggerType, uint32_t 
   uint32_t now = eventTimestamp;
   bool anyCompleted = false;
 
+  auto termMatchesEvent = [&](const struct TriggerTerm &term) {
+    if (term.buttonIndex != buttonIndex || term.triggerType != triggerType) {
+      return false;
+    }
+    // TAP events emitted via emitTriggerEvent represent tapCount==1 only.
+    // tapCount>=2 terms are advanced by processSequencePressEvent.
+    if (triggerType == TRIGGER_TYPE_TAP) {
+      return term.tapCount <= 1;
+    }
+    return true;
+  };
+
 #ifdef DEBUG_OUTPUT_FULL
   DEBUG_OUT.print("TG EVT: ");
   DEBUG_OUT.print(triggerTypeName(triggerType));
@@ -108,8 +120,7 @@ static bool emitTriggerEvent(uint8_t buttonIndex, uint8_t triggerType, uint32_t 
 
     bool matchesNext = false;
     if (p < triggerEntries[i].termCount) {
-      matchesNext = (triggerEntries[i].terms[p].buttonIndex == buttonIndex &&
-                     triggerEntries[i].terms[p].triggerType == triggerType);
+      matchesNext = termMatchesEvent(triggerEntries[i].terms[p]);
     }
 
     if (matchesNext) {
@@ -131,6 +142,16 @@ static bool emitTriggerEvent(uint8_t buttonIndex, uint8_t triggerType, uint32_t 
         DEBUG_OUT.print("TG SEQ complete: #");
         DEBUG_OUT.println(i);
 #endif
+        // Composite trigger completed: consume pending single-tap resolution
+        // for all participating buttons to prevent fallback single actions.
+        for (uint8_t ti = 0; ti < triggerEntries[i].termCount; ti++) {
+          uint8_t bidx = triggerEntries[i].terms[ti].buttonIndex;
+          if (bidx < NUMBER_OF_BUTTONS) {
+            buttonDebouncers[bidx].pressCount = 0;
+            buttonDebouncers[bidx].multiPending = 0;
+            pendingDoubleEventEmitted[bidx] = 0;
+          }
+        }
         releaseSequenceHoldActions((int8_t)i);
         executeTriggerAction((int8_t)i);
         sequenceProgress[i] = 0;
@@ -140,8 +161,7 @@ static bool emitTriggerEvent(uint8_t buttonIndex, uint8_t triggerType, uint32_t 
       continue;
     }
 
-    if (triggerEntries[i].terms[0].buttonIndex == buttonIndex &&
-        triggerEntries[i].terms[0].triggerType == triggerType) {
+    if (termMatchesEvent(triggerEntries[i].terms[0])) {
 #ifdef DEBUG_OUTPUT_FULL
       DEBUG_OUT.print("TG SEQ start: #");
       DEBUG_OUT.print(i);
@@ -174,7 +194,54 @@ static void processSequencePressEvent(uint8_t buttonIndex, uint32_t now)
 
   for (int i = 0; i < MAX_TRIGGER_COUNT; i++) {
     if (triggerEntries[i].termCount < 2) continue;
-    if (sequenceProgress[i] == 0 || sequenceProgress[i] >= triggerEntries[i].termCount) continue;
+
+    // Special handling for composite sequences that start with multi-tap terms,
+    // e.g. tap(B1,2)+tap(B3,2). These cannot start via emitTriggerEvent,
+    // because TAP(2+) is resolved from press aggregation.
+    if (sequenceProgress[i] == 0) {
+      struct TriggerTerm first = triggerEntries[i].terms[0];
+      if (first.buttonIndex == buttonIndex &&
+          first.triggerType == TRIGGER_TYPE_TAP &&
+          first.tapCount >= 2) {
+
+        if (sequenceTermPressCount[i] == 0 ||
+            (uint32_t)(now - sequenceTermPressTime[i]) > globalSettings.thresholdMultiPress) {
+#ifdef DEBUG_OUTPUT_FULL
+          DEBUG_OUT.print("TG PRESS start-first-multitap: #");
+          DEBUG_OUT.print(i);
+          DEBUG_OUT.print(" expect=");
+          debugPrintTriggerTerm(&first);
+          DEBUG_OUT.println("");
+#endif
+          sequenceTermPressCount[i] = 1;
+          sequenceTermPressTime[i] = now;
+          sequenceLastEvent[i] = now;
+        } else {
+          sequenceTermPressCount[i]++;
+#ifdef DEBUG_OUTPUT_FULL
+          DEBUG_OUT.print("TG PRESS first-multitap-advance: #");
+          DEBUG_OUT.print(i);
+          DEBUG_OUT.print(" count=");
+          DEBUG_OUT.print(sequenceTermPressCount[i]);
+          DEBUG_OUT.print(" need=");
+          DEBUG_OUT.println(first.tapCount);
+#endif
+          sequenceTermPressTime[i] = now;
+          if (sequenceTermPressCount[i] >= first.tapCount) {
+            sequenceProgress[i] = 1;
+            sequenceLastEvent[i] = now;
+            sequenceTermPressCount[i] = 0;
+#ifdef DEBUG_OUTPUT_FULL
+            DEBUG_OUT.print("TG PRESS first-multitap-complete: #");
+            DEBUG_OUT.println(i);
+#endif
+          }
+        }
+      }
+      continue;
+    }
+
+    if (sequenceProgress[i] >= triggerEntries[i].termCount) continue;
 
     uint32_t timeoutBaseline = (sequenceTermPressCount[i] > 0) ? sequenceTermPressTime[i] : sequenceLastEvent[i];
     if ((uint32_t)(now - timeoutBaseline) > globalSettings.thresholdMultiPress) {
@@ -627,6 +694,31 @@ void handleRelease (int buttonIndex)    // a button was released: deal with "sti
     uint8_t maxTapCount = getMaxTapCountForButton((uint8_t)buttonIndex);
     int8_t trigSingle = findSingleTapTrigger((uint8_t)buttonIndex);
 
+    // Start composite single-tap chains immediately on release, even when
+    // higher tap counts exist for this button. This allows patterns like
+    // tap(B1)+tap(B3,2) to begin before multi-press timeout expires.
+    bool hasCompositeSingleTapImmediate = false;
+    for (int j = 0; j < MAX_TRIGGER_COUNT; j++) {
+      if (triggerEntries[j].termCount >= 2) {
+        for (uint8_t t = 0; t < triggerEntries[j].termCount; t++) {
+          if (triggerEntries[j].terms[t].buttonIndex == (uint8_t)buttonIndex &&
+              triggerEntries[j].terms[t].triggerType == TRIGGER_TYPE_TAP &&
+              triggerEntries[j].terms[t].tapCount == 1) {
+            hasCompositeSingleTapImmediate = true;
+            break;
+          }
+        }
+      }
+      if (hasCompositeSingleTapImmediate) break;
+    }
+
+    if (buttonDebouncers[buttonIndex].pressCount == 1 && hasCompositeSingleTapImmediate &&
+        !pendingDoubleEventEmitted[buttonIndex]) {
+      (void)emitTriggerEvent((uint8_t)buttonIndex, TRIGGER_TYPE_TAP,
+                   buttonDebouncers[buttonIndex].lastReleaseTime);
+      pendingDoubleEventEmitted[buttonIndex] = 1;
+    }
+
     // For awaited composite single terms, resolve immediately on release.
     if (buttonDebouncers[buttonIndex].pressCount == 1 && maxTapCount <= 1) {
       bool hasStandaloneSingleTap = (trigSingle >= 0);
@@ -654,8 +746,25 @@ void handleRelease (int buttonIndex)    // a button was released: deal with "sti
         }
         return;
       }
-      if (!(hasCompositeSingleTap)) {
-      }  // (no fallback normal action: AT BM removed, all actions via AT TG)
+
+      // Composite single-tap: emit TAP event immediately on release so
+      // sequences like tap(sip)+tap(puff) can progress to the next term.
+      // If a standalone single tap also exists, keep multiPending active as
+      // fallback and let processMultiPressTriggers fire it after timeout
+      // unless a composite sequence completes in time.
+      if (hasCompositeSingleTap) {
+        bool completed = emitTriggerEvent((uint8_t)buttonIndex, TRIGGER_TYPE_TAP,
+                     buttonDebouncers[buttonIndex].lastReleaseTime);
+
+        if (completed || !hasStandaloneSingleTap) {
+          buttonDebouncers[buttonIndex].pressCount = 0;
+          buttonDebouncers[buttonIndex].multiPending = 0;
+          normalActionStarted[buttonIndex] = 0;
+          pendingDoubleEventEmitted[buttonIndex] = 0;
+        }
+        return;
+      }
+
       buttonDebouncers[buttonIndex].pressCount = 0;
       buttonDebouncers[buttonIndex].multiPending = 0;
       normalActionStarted[buttonIndex] = 0;

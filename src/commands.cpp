@@ -180,13 +180,18 @@ static bool parseTriggerExpression(char *expr, struct TriggerTerm *terms, uint8_
     char *plus = strchr(p, '+');
     if (plus) {
       *plus = 0;
-      char *next = plus + 1;
-      trimInPlace(next);
-      p = next;
     }
 
     if (!parseTriggerTerm(p, &terms[*termCount])) return false;
     (*termCount)++;
+
+    if (plus) {
+      char *next = plus + 1;
+      trimInPlace(next);
+      p = next;
+    } else {
+      p = nullptr;
+    }
 
     if (!plus) break;
   }
