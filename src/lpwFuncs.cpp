@@ -147,8 +147,12 @@ void performBatteryManagement()  {
   #endif
 
   // check user inactivity, possibly initiate power save mode
+  bool sleepWithUSB = false;
+  #if defined(DEBUG_SLEEP_WITH_USB)
+  sleepWithUSB = true;
+  #endif
 
-  if (!currentState.usbConnected || DEBUG_SLEEP_WITH_USB) {
+  if (!currentState.usbConnected || sleepWithUSB) {
     inactivityTime += BATTERY_UPDATE_INTERVAL;
     if (inactivityTime >= (inactivityTimeMinutes*60000 + inactivityTimeSeconds*1000))
       inactivityHandler();  // time to go to sleep...
