@@ -58,23 +58,39 @@ ForceSample ForceNAU7802::readForce() {
   static int32_t actX = 0, actY = 0;
   static int32_t xChange = 0, yChange = 0;
   ForceSample s{0,0,0};
-  if (digitalRead(drdy_) == HIGH) { // && nau.available()) {
+
+  if (digitalRead(drdy_) == HIGH) {   // only read if DRDY pin is HIGH (data ready)
+
     if (channel_ == 0) {
-      // reading channel 0 (X)
-      xChange = (XS.process(nau.read()) - actX) / 2;
+      // read channel 0 (X)
+      int32_t rawX = nau.read();
+      xChange = (XS.process(rawX) - actX) / 2;
+      nau.setChannel(NAU7802_CHANNEL2);
       YS.lockBaseline(XS.isMoving());
+      #ifdef DEBUG_NAU_SENSORVALUES
+         XS.printValues(0x07, 40000);  // debug output loadcell values y axis
+      #endif
+      // Serial.print(rawX); Serial.print(" "); 
       actX += xChange;
       actY += yChange;
       channel_ = 1;
+    
     } else {
-      // reading channel 1 (Y)
-      yChange = (YS.process(nau.read()) - actY) / 2;
+
+      // read channel 1 (Y)
+      int32_t rawY = nau.read();
+      yChange = (YS.process(rawY) - actY) / 2;
+      nau.setChannel(NAU7802_CHANNEL1);
       XS.lockBaseline(YS.isMoving());
+      #ifdef DEBUG_NAU_SENSORVALUES
+         YS.printValues(0x07, 40000);  // debug output loadcell values y axis
+      #endif
+      // Serial.print(rawY); Serial.println(""); 
       actX += xChange;
       actY += yChange;
       channel_ = 0;
     }
-    nau.setChannel(channel_ == 0 ? NAU7802_CHANNEL1 : NAU7802_CHANNEL2);
+    
     s.xRaw = actX / NAU_DIVIDER;
     s.yRaw = actY / NAU_DIVIDER;
     s.hasData = 1;
