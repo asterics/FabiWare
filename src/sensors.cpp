@@ -159,24 +159,22 @@ void readPressure()
 */
 void readForce()
 {
-  NB_DELAY_START(force_ts, 1000 / FORCE_MAX_SAMPLINGRATE)
-    if (gForce) {
-      int32_t currentX = 0, currentY = 0;
-      ForceSample s = gForce->readForce();
-      if (s.hasData) {
-        currentX = s.xRaw;
-        currentY = s.yRaw;
-        if (currentSensorDataCore1.calib_now) {
-          currentX = 0;
-          currentY = 0;
-        }
-        mutex_enter_blocking(&(currentSensorDataCore1.sensorDataMutex));
-        currentSensorDataCore1.xRaw =  currentX;
-        currentSensorDataCore1.yRaw =  currentY;
-        mutex_exit(&(currentSensorDataCore1.sensorDataMutex));
+  if (gForce) {
+    int32_t currentX = 0, currentY = 0;
+    ForceSample s = gForce->readForce();
+    if (s.hasData) {
+      currentX = s.xRaw;
+      currentY = s.yRaw;
+      if (currentSensorDataCore1.calib_now) {
+        currentX = 0;
+        currentY = 0;
       }
+      mutex_enter_blocking(&(currentSensorDataCore1.sensorDataMutex));
+      currentSensorDataCore1.xRaw =  currentX;
+      currentSensorDataCore1.yRaw =  currentY;
+      mutex_exit(&(currentSensorDataCore1.sensorDataMutex));
     }
-  NB_DELAY_END
+  }
 }
 
 
