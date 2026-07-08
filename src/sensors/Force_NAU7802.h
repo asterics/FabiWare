@@ -20,7 +20,7 @@ class Adafruit_NAU7802;
 #define SENSORBOARD_SMD_VERY_LOW 7
 
 // NAU7802-specific parameters
-#define NAU_DIVIDER 120
+#define NAU_DIVIDER 450
 
 class ForceNAU7802 : public IForceSensor {
 public:
